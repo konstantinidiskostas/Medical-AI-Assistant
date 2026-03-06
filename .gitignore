@@ -37,3 +37,6 @@ build/
 
 ### Mac OS ###
 .DS_Store
+# Custom sensitive files
+src/main/resources/application.properties
+.env
