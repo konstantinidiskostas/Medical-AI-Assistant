@@ -1,6 +1,6 @@
 # Medical AI Assistant 🩺🤖
 
-A modern medical history management system and diagnosis support tool powered by Artificial Intelligence. This project is part of my undergraduate thesis.
+A modern medical history management system and diagnosis support tool powered by Artificial Intelligence. This project is my undergraduate thesis.
 
 ## 📋 Description
 The application allows healthcare professionals to manage patient profiles, record medical cases, and receive AI-generated diagnostic support based on clinical data.
