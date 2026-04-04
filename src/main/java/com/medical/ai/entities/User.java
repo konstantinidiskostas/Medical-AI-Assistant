@@ -43,7 +43,7 @@ public class User {
     public User() {}
 
     /**
-     * Custom Constructor.
+     * Constructor to initialize a user with basic information.
      */
     public User(String username, String password, String phoneNumber) {
         this.username = username;
