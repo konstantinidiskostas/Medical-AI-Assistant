@@ -1,5 +1,5 @@
 # Medical AI Assistant 🩺🤖
-
+> **Status: 🚧 In Active Development**
 A modern medical history management system and diagnosis support tool powered by Artificial Intelligence. This project is my undergraduate thesis.
 
 ## 📋 Description
