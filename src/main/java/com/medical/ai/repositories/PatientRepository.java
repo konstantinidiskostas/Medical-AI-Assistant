@@ -5,6 +5,13 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 import java.util.Optional;
 
+/**
+ * By extending JpaRepository, Spring Data JPA automatically provides
+ * standard CRUD (Create, Read, Update, Delete) operations.
+ * - Patient: The domain type the repository manages.
+ * - Long: The type of the id of the entity the repository manages.
+ * No boilerplate code is needed for basic database interactions.
+ */
 @Repository
 public interface PatientRepository extends JpaRepository<Patient, Long> {
     /**
