@@ -2,6 +2,7 @@ package com.medical.ai.controllers;
 
 import com.medical.ai.entities.Patient;
 import com.medical.ai.repositories.PatientRepository;
+import com.medical.ai.services.PatientService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
@@ -16,7 +17,7 @@ import java.util.List;
 public class PatientController {
 
     @Autowired // This connects the Controller with our Repository (the "Storekeeper")
-    private PatientRepository patientRepository;
+    private PatientService patientService;
 
     /**
      * Retrieves a list of all patients registered in the system.
@@ -24,7 +25,7 @@ public class PatientController {
      */
     @GetMapping
     public List<Patient> getAllPatients() {
-        return patientRepository.findAll();
+        return patientService.findAll();
     }
 
     /**
@@ -34,7 +35,7 @@ public class PatientController {
      */
     @PostMapping
     public Patient createPatient(@RequestBody Patient patient) {
-        return patientRepository.save(patient);
+        return patientService.save(patient);
     }
 
     /**
@@ -44,7 +45,7 @@ public class PatientController {
      */
     @GetMapping("/{id}")
     public Patient getPatientById(@PathVariable Long id) {
-        return patientRepository.findById(id)
+        return patientService.findById(id)
                 .orElseThrow(() -> new RuntimeException("Patient not found with id: " + id));
     }
 }
