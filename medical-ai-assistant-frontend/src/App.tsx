@@ -81,9 +81,14 @@ function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
       });
+
       if (response.ok) {
-        const data = await response.json();
-        setDoctorId(data.id);
+        const data = await response.json(); // Data contains {token, user}
+
+        // 1. Save the token in the browser's local storage
+        localStorage.setItem('jwtToken', data.token);
+
+        setDoctorId(data.user.id);
         setIsLoggedIn(true);
       } else {
         alert('Invalid credentials');
@@ -273,7 +278,7 @@ function App() {
 
     return (
         <div style={{ padding: '50px' }}>
-          <h1>Doctor Login</h1>
+          <h1>Medical AI Assistant Login</h1>
           <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxWidth: '300px' }}>
             <input placeholder="Username" value={username} onChange={e => setUsername(e.target.value)} required />
             <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} required />
