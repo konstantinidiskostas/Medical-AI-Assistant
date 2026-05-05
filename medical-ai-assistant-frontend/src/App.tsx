@@ -1,384 +1,235 @@
 import { useState, useEffect } from 'react';
 
 function App() {
-  // --- Authentication States ---
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  // --- States με Persistence (θυμούνται τι είχες πριν το refresh) ---
+  const [isLoggedIn, setIsLoggedIn] = useState(() => !!localStorage.getItem('jwtToken'));
   const [isRegistering, setIsRegistering] = useState(false);
+  const [currentView, setCurrentView] = useState(() => localStorage.getItem('app_view') || 'dashboard');
 
-  // --- Navigation State ---
-  const [currentView, setCurrentView] = useState('dashboard');
+  const [doctorId, setDoctorId] = useState<number | null>(() => {
+    const saved = localStorage.getItem('doctorId');
+    return saved ? parseInt(saved) : null;
+  });
 
-  // --- Application Data States ---
-  const [doctorId, setDoctorId] = useState<number | null>(null);
   const [patients, setPatients] = useState<any[]>([]);
-  const [selectedPatient, setSelectedPatient] = useState<any>(null);
+  const [selectedPatient, setSelectedPatient] = useState<any>(() => {
+    const saved = localStorage.getItem('selected_patient');
+    return saved ? JSON.parse(saved) : null;
+  });
+
   const [medicalCases, setMedicalCases] = useState<any[]>([]);
   const [aiQuery, setAiQuery] = useState('');
   const [pendingDiagnosis, setPendingDiagnosis] = useState<string | null>(null);
-
-  // NEW STATE: Holds the patient object currently being edited
   const [editingPatient, setEditingPatient] = useState<any>(null);
 
-  // --- Form Input States ---
+  // Input states
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [regFullName, setRegFullName] = useState('');
   const [regUsername, setRegUsername] = useState('');
   const [regPassword, setRegPassword] = useState('');
-
-  // --- Patient Form States (Used for both Add and Edit) ---
   const [patientName, setPatientName] = useState('');
   const [patientAmka, setPatientAmka] = useState('');
   const [patientAge, setPatientAge] = useState('');
   const [patientGender, setPatientGender] = useState('');
   const [patientTelephone, setPatientTelephone] = useState('');
 
-  // --- API Fetching Functions ---
+  // --- Sync με LocalStorage ---
+  useEffect(() => { localStorage.setItem('app_view', currentView); }, [currentView]);
+  useEffect(() => {
+    if (selectedPatient) localStorage.setItem('selected_patient', JSON.stringify(selectedPatient));
+    else localStorage.removeItem('selected_patient');
+  }, [selectedPatient]);
+
+  const getAuthHeaders = () => {
+    const token = localStorage.getItem('jwtToken');
+    return { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
+  };
 
   const fetchPatients = async () => {
     if (doctorId) {
       try {
-        const response = await fetch(`http://localhost:8080/api/patients/doctor/${doctorId}`);
-        if (response.ok) {
-          const data = await response.json();
-          setPatients(data);
-        }
-      } catch (error) {
-        console.error("Error fetching patients:", error);
-      }
+        const response = await fetch(`http://localhost:8080/api/patients/doctor/${doctorId}`, { headers: getAuthHeaders() });
+        if (response.ok) setPatients(await response.json());
+      } catch (error) { console.error("Error:", error); }
     }
   };
 
   const fetchMedicalCases = async (patientId: number) => {
     try {
-      const response = await fetch(`http://localhost:8080/api/medical-cases/patient/${patientId}`);
-      if (response.ok) {
-        const data = await response.json();
-        setMedicalCases(data);
-      }
-    } catch (error) {
-      console.error("Error fetching medical cases:", error);
-    }
+      const response = await fetch(`http://localhost:8080/api/medical-cases/patient/${patientId}`, { headers: getAuthHeaders() });
+      if (response.ok) setMedicalCases(await response.json());
+    } catch (error) { console.error("Error:", error); }
   };
 
-  useEffect(() => {
-    if (currentView === 'patients') fetchPatients();
-  }, [currentView, doctorId]);
-
-  useEffect(() => {
-    if (currentView === 'patient-details' && selectedPatient) {
-      fetchMedicalCases(selectedPatient.patientId);
-    }
-  }, [currentView, selectedPatient]);
-
-  // --- Auth Handlers ---
+  useEffect(() => { if (currentView === 'patients') fetchPatients(); }, [currentView, doctorId]);
+  useEffect(() => { if (currentView === 'patient-details' && selectedPatient) fetchMedicalCases(selectedPatient.patientId); }, [currentView, selectedPatient]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       const response = await fetch('http://localhost:8080/api/users/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
       });
-
       if (response.ok) {
-        const data = await response.json(); // Data contains {token, user}
-
-        // 1. Save the token in the browser's local storage
+        const data = await response.json();
         localStorage.setItem('jwtToken', data.token);
-
+        localStorage.setItem('doctorId', data.user.id);
         setDoctorId(data.user.id);
         setIsLoggedIn(true);
-      } else {
-        alert('Invalid credentials');
-      }
-    } catch (error) {
-      alert('Connection error');
-    }
+      } else alert('Invalid credentials');
+    } catch (error) { alert('Connection error'); }
   };
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       const response = await fetch('http://localhost:8080/api/users/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fullName: regFullName, username: regUsername, password: regPassword, role: 'Doctor' }),
       });
-      if (response.ok) {
-        alert('Registration successful!');
-        setIsRegistering(false);
-      } else {
-        alert('Registration failed.');
-      }
-    } catch (error) {
-      alert('Error during registration.');
-    }
+      if (response.ok) { alert('Επιτυχής εγγραφή!'); setIsRegistering(false); }
+      else alert('Η εγγραφή απέτυχε.');
+    } catch (error) { alert('Σφάλμα.'); }
   };
 
-  // --- Patient CRUD Handlers ---
+  const handleLogout = () => {
+    localStorage.clear();
+    setIsLoggedIn(false);
+    setDoctorId(null);
+    setCurrentView('dashboard');
+    setSelectedPatient(null);
+  };
 
-  /**
-   * Adds a new patient to the doctor's list.
-   */
   const handleAddPatient = async () => {
     try {
       const response = await fetch('http://localhost:8080/api/patients', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          fullName: patientName,
-          amka: patientAmka,
-          age: parseInt(patientAge) || 0,
-          gender: patientGender,
-          telephone: patientTelephone,
-          doctorId: doctorId
-        }),
+        method: 'POST', headers: getAuthHeaders(),
+        body: JSON.stringify({ fullName: patientName, amka: patientAmka, age: parseInt(patientAge) || 0, gender: patientGender, telephone: patientTelephone, doctorId: doctorId }),
       });
-      if (response.ok) {
-        alert('Patient added!');
-        fetchPatients();
-        clearPatientForm();
-      }
-    } catch (error) {
-      alert('Error adding patient.');
-    }
+      if (response.ok) { alert('Ο ασθενής προστέθηκε!'); fetchPatients(); clearPatientForm(); }
+    } catch (error) { alert('Σφάλμα.'); }
   };
 
-  /**
-   * NEW: Deletes a patient and refreshes the list.
-   */
   const handleDeletePatient = async (id: number) => {
-    if (!window.confirm("Are you sure you want to delete this patient? All history will be lost.")) return;
-
+    if (!window.confirm("Είστε σίγουροι;")) return;
     try {
-      const response = await fetch(`http://localhost:8080/api/patients/${id}`, {
-        method: 'DELETE',
-      });
-      if (response.ok) {
-        alert('Patient deleted.');
-        fetchPatients();
-      }
-    } catch (error) {
-      alert('Error deleting patient.');
-    }
+      const response = await fetch(`http://localhost:8080/api/patients/${id}`, { method: 'DELETE', headers: getAuthHeaders() });
+      if (response.ok) fetchPatients();
+    } catch (error) { alert('Σφάλμα.'); }
   };
 
-  /**
-   * NEW: Prepares the form for editing an existing patient.
-   */
-  const startEdit = (p: any) => {
-    setEditingPatient(p);
-    setPatientName(p.fullName);
-    setPatientAmka(p.amka);
-    setPatientAge(p.age.toString());
-    setPatientGender(p.gender);
-    setPatientTelephone(p.telephone);
-  };
-
-  /**
-   * NEW: Sends updated patient data to the backend.
-   */
   const handleUpdatePatient = async () => {
     if (!editingPatient) return;
-
     try {
       const response = await fetch(`http://localhost:8080/api/patients/${editingPatient.patientId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          fullName: patientName,
-          amka: patientAmka,
-          age: parseInt(patientAge) || 0,
-          gender: patientGender,
-          telephone: patientTelephone,
-          doctorId: doctorId
-        }),
+        method: 'PUT', headers: getAuthHeaders(),
+        body: JSON.stringify({ fullName: patientName, amka: patientAmka, age: parseInt(patientAge) || 0, gender: patientGender, telephone: patientTelephone, doctorId: doctorId }),
       });
-
-      if (response.ok) {
-        alert('Patient updated successfully!');
-        setEditingPatient(null);
-        clearPatientForm();
-        fetchPatients();
-      }
-    } catch (error) {
-      alert('Error updating patient.');
-    }
+      if (response.ok) { alert('Ενημερώθηκε!'); setEditingPatient(null); clearPatientForm(); fetchPatients(); }
+    } catch (error) { alert('Σφάλμα.'); }
   };
 
-  const clearPatientForm = () => {
-    setPatientName(''); setPatientAmka(''); setPatientAge('');
-    setPatientGender(''); setPatientTelephone('');
-  };
-
-  // --- AI Handlers ---
+  const startEdit = (p: any) => { setEditingPatient(p); setPatientName(p.fullName); setPatientAmka(p.amka); setPatientAge(p.age.toString()); setPatientGender(p.gender); setPatientTelephone(p.telephone); };
+  const clearPatientForm = () => { setPatientName(''); setPatientAmka(''); setPatientAge(''); setPatientGender(''); setPatientTelephone(''); };
 
   const handleAskAI = async () => {
     if (!aiQuery) return;
-    setPendingDiagnosis("Thinking...");
+    setPendingDiagnosis("Σκέφτομαι...");
     try {
       const response = await fetch('http://localhost:8080/api/ai/query', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: getAuthHeaders(),
         body: JSON.stringify({ query: aiQuery }),
       });
-      if (response.ok) {
-        const data = await response.json();
-        setPendingDiagnosis(data.diagnosis);
-      }
-    } catch (error) {
-      setPendingDiagnosis(null);
-    }
+      if (response.ok) { const data = await response.json(); setPendingDiagnosis(data.diagnosis); }
+    } catch (error) { setPendingDiagnosis(null); }
   };
 
   const handleSaveCase = async () => {
     if (!selectedPatient || !aiQuery || !pendingDiagnosis) return;
     try {
       const response = await fetch('http://localhost:8080/api/medical-cases/save', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          patientId: selectedPatient.patientId,
-          symptoms: aiQuery,
-          diagnosis: pendingDiagnosis
-        }),
+        method: 'POST', headers: getAuthHeaders(),
+        body: JSON.stringify({ patientId: selectedPatient.patientId, symptoms: aiQuery, diagnosis: pendingDiagnosis }),
       });
-      if (response.ok) {
-        const savedCase = await response.json();
-        setMedicalCases([savedCase, ...medicalCases]);
-        setAiQuery('');
-        setPendingDiagnosis(null);
-        alert('Case saved!');
-      }
-    } catch (error) {
-      alert('Save failed');
-    }
+      if (response.ok) { const savedCase = await response.json(); setMedicalCases([savedCase, ...medicalCases]); setAiQuery(''); setPendingDiagnosis(null); alert('Αποθηκεύτηκε!'); }
+    } catch (error) { alert('Αποτυχία αποθήκευσης'); }
   };
 
-  // --- UI Render ---
-
   if (!isLoggedIn) {
-    // ... Login/Register UI remains same ...
-    if (isRegistering) {
-      return (
-          <div style={{ padding: '50px' }}>
-            <h1>Doctor Registration</h1>
-            <form onSubmit={handleRegister} style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxWidth: '300px' }}>
-              <input placeholder="Full Name" value={regFullName} onChange={e => setRegFullName(e.target.value)} required />
-              <input placeholder="Username" value={regUsername} onChange={e => setRegUsername(e.target.value)} required />
-              <input type="password" placeholder="Password" value={regPassword} onChange={e => setRegPassword(e.target.value)} required />
-              <button type="submit" style={{ cursor: 'pointer', background: '#28a745', color: '#fff' }}>Register</button>
-              <button type="button" onClick={() => setIsRegistering(false)} style={{ cursor: 'pointer' }}>Back to Login</button>
-            </form>
-          </div>
-      );
-    }
-
     return (
-        <div style={{ padding: '50px' }}>
-          <h1>Medical AI Assistant Login</h1>
-          <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxWidth: '300px' }}>
-            <input placeholder="Username" value={username} onChange={e => setUsername(e.target.value)} required />
-            <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} required />
-            <button type="submit" style={{ cursor: 'pointer', background: '#007bff', color: '#fff' }}>Login</button>
-            <button type="button" onClick={() => setIsRegistering(true)} style={{ cursor: 'pointer' }}>Need an account? Register</button>
-          </form>
+        <div className="min-h-screen flex items-center justify-center bg-[#f7f9fc] p-4 font-sans">
+          <div className="bg-white p-10 rounded-3xl shadow-2xl w-full max-w-lg border border-slate-100 flex flex-col items-center">
+            <div className="text-6xl mb-6">🩺</div>
+            <h1 className="text-4xl font-extrabold text-blue-600 mb-2">{isRegistering ? 'Εγγραφή' : 'Είσοδος'}</h1>
+            <p className="text-slate-500 mb-10 text-center">{isRegistering ? 'Δημιουργία νέου λογαριασμού' : 'Καλώς ορίσατε στον Ιατρικό Βοηθό'}</p>
+            <form onSubmit={isRegistering ? handleRegister : handleLogin} className="flex flex-col gap-6 w-full">
+              {isRegistering && (<div><label className="block text-sm font-semibold text-slate-700 mb-1.5">Ονοματεπώνυμο</label><input className="w-full p-3.5 border border-slate-200 rounded-xl outline-none" placeholder="Όνομα" onChange={e => setRegFullName(e.target.value)} required /></div>)}
+              <div><label className="block text-sm font-semibold text-slate-700 mb-1.5">Username</label><input className="w-full p-3.5 border border-slate-200 rounded-xl outline-none" placeholder="Username" onChange={e => isRegistering ? setRegUsername(e.target.value) : setUsername(e.target.value)} required /></div>
+              <div><label className="block text-sm font-semibold text-slate-700 mb-1.5">Κωδικός</label><input type="password" className="w-full p-3.5 border border-slate-200 rounded-xl outline-none" placeholder="********" onChange={e => isRegistering ? setRegPassword(e.target.value) : setPassword(e.target.value)} required /></div>
+              <button type="submit" className="w-full bg-blue-600 text-white font-bold p-4 rounded-xl hover:bg-blue-700 transition shadow-md">{isRegistering ? 'Εγγραφή' : 'Σύνδεση'}</button>
+            </form>
+            <div className="w-full mt-6 text-center text-slate-500"><p>{isRegistering ? 'Έχετε ήδη λογαριασμό;' : 'Δεν έχετε λογαριασμό;'} <button onClick={() => setIsRegistering(!isRegistering)} className="text-blue-600 font-semibold hover:underline">{isRegistering ? 'Είσοδος' : 'Εγγραφή'}</button></p></div>
+          </div>
         </div>
     );
   }
 
   return (
-      <div style={{ padding: '20px' }}>
-        <h1>Medical AI Assistant</h1>
+      <div className="min-h-screen bg-slate-50 p-8">
+        <header className="flex justify-between items-center mb-8 bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+          <h1 className="text-3xl font-bold text-slate-800 font-sans">Medical AI Assistant</h1>
+          <button onClick={handleLogout} className="bg-red-50 text-red-600 px-6 py-2 rounded-xl font-semibold hover:bg-red-100 transition">Logout</button>
+        </header>
 
         {currentView === 'dashboard' && (
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <button onClick={() => setCurrentView('patients')}>Manage Patients</button>
-              <button onClick={() => { setIsLoggedIn(false); setDoctorId(null); }}>Logout</button>
-            </div>
+            <div className="flex gap-4"><button onClick={() => setCurrentView('patients')} className="bg-blue-600 text-white px-8 py-4 rounded-2xl font-bold shadow-lg hover:bg-blue-700 transition">Διαχείριση Ασθενών</button></div>
         )}
 
         {currentView === 'patients' && (
-            <div>
-              <h2>{editingPatient ? 'Edit Patient' : 'Add New Patient'}</h2>
-              <div style={{ marginBottom: '20px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                <input placeholder="Full Name" value={patientName} onChange={(e) => setPatientName(e.target.value)} />
-                <input placeholder="AMKA" value={patientAmka} onChange={(e) => setPatientAmka(e.target.value)} />
-                <input type="number" placeholder="Age" value={patientAge} onChange={(e) => setPatientAge(e.target.value)} />
-                <input placeholder="Gender" value={patientGender} onChange={(e) => setPatientGender(e.target.value)} />
-                <input placeholder="Telephone" value={patientTelephone} onChange={(e) => setPatientTelephone(e.target.value)} />
-
-                {editingPatient ? (
-                    <>
-                      <button onClick={handleUpdatePatient} style={{ background: '#ffc107' }}>Update Patient</button>
-                      <button onClick={() => { setEditingPatient(null); clearPatientForm(); }}>Cancel</button>
-                    </>
-                ) : (
-                    <button onClick={handleAddPatient} style={{ background: '#28a745', color: 'white' }}>Save New Patient</button>
-                )}
+            <div className="space-y-6">
+              <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
+                <h2 className="text-2xl font-semibold mb-6">{editingPatient ? 'Επεξεργασία Ασθενή' : 'Προσθήκη Ασθενή'}</h2>
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                  <input className="p-3 border rounded-xl" placeholder="Full Name" value={patientName} onChange={e => setPatientName(e.target.value)} />
+                  <input className="p-3 border rounded-xl" placeholder="AMKA" value={patientAmka} onChange={e => setPatientAmka(e.target.value)} />
+                  <input className="p-3 border rounded-xl" placeholder="Age" value={patientAge} onChange={e => setPatientAge(e.target.value)} />
+                  <input className="p-3 border rounded-xl" placeholder="Gender" value={patientGender} onChange={e => setPatientGender(e.target.value)} />
+                  <input className="p-3 border rounded-xl" placeholder="Telephone" value={patientTelephone} onChange={e => setPatientTelephone(e.target.value)} />
+                </div>
+                <button onClick={editingPatient ? handleUpdatePatient : handleAddPatient} className="mt-6 bg-green-600 text-white px-8 py-3 rounded-xl font-semibold hover:bg-green-700">{editingPatient ? 'Ενημέρωση' : 'Αποθήκευση'}</button>
               </div>
-              <hr />
-              <h3>My Patients</h3>
-              <ul>
+              <ul className="grid gap-4">
                 {patients.map(p => (
-                    <li key={p.patientId} style={{ marginBottom: '15px', borderBottom: '1px solid #eee', paddingBottom: '10px' }}>
-                      <strong>{p.fullName}</strong> (AMKA: {p.amka})
-                      <div style={{ marginTop: '5px', display: 'flex', gap: '5px' }}>
-                        <button onClick={() => { setSelectedPatient(p); setCurrentView('patient-details'); }}>View History & AI</button>
-                        <button onClick={() => startEdit(p)} style={{ background: '#ffc107' }}>Edit</button>
-                        <button onClick={() => handleDeletePatient(p.patientId)} style={{ background: '#dc3545', color: 'white' }}>Delete</button>
+                    <li key={p.patientId} className="bg-white p-6 rounded-2xl shadow-sm border flex justify-between items-center transition hover:shadow-md">
+                      <span className="font-medium text-lg">{p.fullName} <span className="text-slate-400">({p.amka})</span></span>
+                      <div className="flex gap-3">
+                        <button onClick={() => { setSelectedPatient(p); setCurrentView('patient-details'); }} className="text-blue-600 font-medium hover:underline transition">Ιστορικό</button>
+                        <button onClick={() => startEdit(p)} className="text-yellow-600 font-medium hover:underline transition">Επεξεργασία</button>
+                        <button onClick={() => handleDeletePatient(p.patientId)} className="text-red-500 font-medium hover:underline transition">Διαγραφή</button>
                       </div>
                     </li>
                 ))}
               </ul>
-              <button onClick={() => setCurrentView('dashboard')}>Back to Dashboard</button>
+              <button onClick={() => setCurrentView('dashboard')} className="text-slate-500 hover:text-slate-800 transition">← Πίσω στο Dashboard</button>
             </div>
         )}
 
         {currentView === 'patient-details' && selectedPatient && (
-            <div style={{ display: 'flex', gap: '30px', marginTop: '20px' }}>
-              {/* Left: History */}
-              <div style={{ flex: 1, border: '1px solid #ddd', padding: '15px' }}>
-                <h3>History for {selectedPatient.fullName}</h3>
-                {medicalCases.length === 0 ? <p>No history found.</p> : null}
-                {medicalCases.map(m => (
-                    <div key={m.id} style={{ borderBottom: '1px solid #ddd', marginBottom: '10px' }}>
-                      <small>{new Date(m.date).toLocaleString()}</small>
-                      <p><strong>Diagnosis:</strong> {m.diagnosis}</p>
-                    </div>
-                ))}
+            <div className="grid md:grid-cols-2 gap-8 font-sans">
+              <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-100">
+                <h3 className="text-xl font-bold mb-6">Ιστορικό: {selectedPatient.fullName}</h3>
+                {medicalCases.map(m => <div key={m.id} className="border-b py-4 last:border-0"><p className="text-sm text-slate-400">{new Date(m.date).toLocaleString()}</p><p className="font-medium mt-1">{m.diagnosis}</p></div>)}
+                <button onClick={() => setCurrentView('patients')} className="mt-8 text-slate-500 hover:text-slate-800 transition">← Πίσω στη λίστα</button>
               </div>
-
-              {/* Right: AI Panel */}
-              <div style={{ flex: 1, backgroundColor: '#f0f4f8', padding: '20px', borderRadius: '8px' }}>
-                <h3>Consult AI</h3>
-                <textarea
-                    style={{ width: '100%', height: '100px' }}
-                    placeholder="Enter symptoms..."
-                    value={aiQuery}
-                    onChange={e => setAiQuery(e.target.value)}
-                    disabled={pendingDiagnosis !== null && pendingDiagnosis !== "Thinking..."}
-                />
-                {!pendingDiagnosis && <button onClick={handleAskAI} disabled={!aiQuery}>Ask AI</button>}
-                {pendingDiagnosis && (
-                    <div style={{ marginTop: '10px', background: 'white', padding: '10px', border: '1px solid #007bff' }}>
-                      <p>{pendingDiagnosis}</p>
-                      {pendingDiagnosis !== "Thinking..." && (
-                          <div style={{ display: 'flex', gap: '10px' }}>
-                            <button onClick={handleSaveCase} style={{ background: 'green', color: 'white' }}>Save</button>
-                            <button onClick={() => setPendingDiagnosis(null)} style={{ background: 'red', color: 'white' }}>Discard</button>
-                          </div>
-                      )}
-                    </div>
-                )}
+              <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-100">
+                <h3 className="text-xl font-bold mb-6">Διάγνωση AI</h3>
+                <textarea className="w-full p-4 border rounded-2xl h-40 focus:ring-2 focus:ring-blue-100 outline-none transition" placeholder="Περιγράψτε συμπτώματα..." value={aiQuery} onChange={e => setAiQuery(e.target.value)} />
+                <button onClick={handleAskAI} className="mt-4 w-full bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700 transition">Ανάλυση</button>
+                {pendingDiagnosis && <div className="mt-6 p-6 bg-blue-50 rounded-2xl border border-blue-100"><p className="text-blue-900">{pendingDiagnosis}</p><button onClick={handleSaveCase} className="block mt-4 font-bold text-green-700 hover:text-green-800 transition">Αποθήκευση</button></div>}
               </div>
             </div>
-        )}
-
-        {currentView === 'patient-details' && (
-            <button style={{ marginTop: '20px' }} onClick={() => setCurrentView('patients')}>Back to Patients</button>
         )}
       </div>
   );
