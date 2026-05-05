@@ -1,48 +1,79 @@
 import { useState } from 'react';
 
 function App() {
-  // Track if user is logged in
+  // Toggle state to switch between login view and registration view
+  const [isRegistering, setIsRegistering] = useState(false);
+
+  // Auth state to keep track if the user is logged in
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
-  // Track inputs for login
+  // State variables for form input fields
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [fullName, setFullName] = useState('');
 
-  // Handle the form submit
+  // Handle existing user login
   const handleLogin = async (e: React.FormEvent) => {
-    // Stop the page from reloading when the form is submitted
     e.preventDefault();
-
     try {
-      // Send the credentials to the Spring Boot backend
+      // Send login credentials to the Spring Boot backend
       const response = await fetch('http://localhost:8080/api/users/login', {
-        method: 'POST', // Use POST because we are sending data
-        headers: {
-          'Content-Type': 'application/json', // Tell the server to expect JSON format
-        },
-        // Turn the username/password objects into a JSON string
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
       });
 
-      // If the server returns a 200 OK status, we're in
       if (response.ok) {
+        // Successful login
         setIsLoggedIn(true);
       } else {
+        // Handle invalid credentials
         alert('Invalid credentials');
       }
     } catch (error) {
-      // Handle network errors, like if the server is offline
       console.error('Login error:', error);
       alert('Server is unreachable');
     }
   };
 
-  // If user is not logged in, show Login Screen
+  // Handle new user registration
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      // Send registration data to the Spring Boot backend
+      // Hardcoding role to 'doctor' as per requirements
+      const response = await fetch('http://localhost:8080/api/users/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username,
+          password,
+          fullName,
+          role: 'doctor'
+        }),
+      });
+
+      if (response.ok) {
+        // Registration success, reset to login view
+        alert('Registration successful! Please log in.');
+        setIsRegistering(false);
+      } else {
+        alert('Registration failed');
+      }
+    } catch (error) {
+      console.error('Registration error:', error);
+      alert('Server is unreachable');
+    }
+  };
+
+  // Conditional Rendering: If not logged in, show Auth screen
   if (!isLoggedIn) {
     return (
         <div>
-          <h1>Login to Medical AI</h1>
-          <form onSubmit={handleLogin}>
+          <h1>{isRegistering ? 'Register' : 'Login'}</h1>
+
+          {/* Dynamic form submission handler based on current mode */}
+          <form onSubmit={isRegistering ? handleRegister : handleLogin}>
             <input
                 type="text"
                 placeholder="Username"
@@ -55,13 +86,29 @@ function App() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
             />
-            <button type="submit">Login</button>
+
+            {/* Display Full Name field only when registering */}
+            {isRegistering && (
+                <input
+                    type="text"
+                    placeholder="Full Name"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                />
+            )}
+
+            <button type="submit">{isRegistering ? 'Register' : 'Login'}</button>
           </form>
+
+          {/* Button to toggle between login and register views */}
+          <button onClick={() => setIsRegistering(!isRegistering)}>
+            {isRegistering ? 'Already have an account? Login' : 'Need an account? Register'}
+          </button>
         </div>
     );
   }
 
-  // If user IS logged in, show the App
+  // Dashboard view for authenticated users
   return (
       <div>
         <h1>Medical AI Assistant 🩺</h1>
