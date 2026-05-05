@@ -31,23 +31,23 @@ public class UserController {
      * POST /api/users/login
      */
     @PostMapping("/login")
-    public ResponseEntity<String> loginUser(@RequestBody User loginRequest) {
-        // 1. Ψάχνουμε αν υπάρχει ο χρήστης με βάση το username
+    public ResponseEntity<?> loginUser(@RequestBody User loginRequest) {
+        // Find the user by username using the service
         Optional<User> existingUser = userService.findByUsername(loginRequest.getUsername());
 
-        // 2. Αν ο χρήστης βρεθεί, ελέγχουμε τον κωδικό
+        // If user exists, verify password
         if (existingUser.isPresent()) {
             User user = existingUser.get();
 
-            // ΠΡΟΣΟΧΗ: Σε κανονικές συνθήκες οι κωδικοί κρυπτογραφούνται (π.χ. BCrypt).
-            // Για τώρα, κάνουμε έναν απλό έλεγχο ταύτισης του κειμένου.
             if (user.getPassword().equals(loginRequest.getPassword())) {
-                return ResponseEntity.ok("Login successful for user: " + user.getUsername());
+                // RETURN THE USER OBJECT instead of a String
+                // This allows the Frontend to read the 'id' field
+                return ResponseEntity.ok(user);
             } else {
-                return ResponseEntity.status(401).body("Invalid password"); // 401 = Unauthorized
+                return ResponseEntity.status(401).body("Invalid password");
             }
         } else {
-            return ResponseEntity.status(404).body("User not found"); // 404 = Not Found
+            return ResponseEntity.status(404).body("User not found");
         }
     }
 }

@@ -1,10 +1,12 @@
 package com.medical.ai.services;
 
 import com.medical.ai.entities.Patient;
+import com.medical.ai.entities.User;
 import com.medical.ai.repositories.PatientRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -50,5 +52,23 @@ public class PatientService {
      */
     public Optional<Patient> findByAmka(String amka) {
         return patientRepository.findByAmka(amka);
+    }
+    /**
+     * Finds all patients that belong to a specific doctor.
+     * Essential for the dashboard to show only "My Patients".
+     */
+    public List<Patient> findAllByDoctor(User doctor) {
+        return patientRepository.findByDoctor(doctor);
+    }
+    public List<Patient> findAll() {
+        return patientRepository.findAll();
+    }
+    /**
+     * Finds a patient by their unique ID.
+     * @param id The ID of the patient.
+     * @return An Optional containing the patient if found.
+     */
+    public Optional<Patient> findById(Long id) {
+        return patientRepository.findById(id);
     }
 }

@@ -20,5 +20,5 @@ public interface MedicalCaseRepository extends JpaRepository<MedicalCase, Long> 
      * Retrieves all medical cases associated with a specific patient.
      * We order them by creation date descending so the most recent visits appear first.
      */
-    List<MedicalCase> findByPatientOrderByCreatedAtDesc(Patient patient);
+    List<MedicalCase> findByPatientOrderByDateDesc(Patient patient);
 }

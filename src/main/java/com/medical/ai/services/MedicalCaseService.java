@@ -44,7 +44,7 @@ public class MedicalCaseService {
      * @return A list of all medical cases for that patient, sorted by date (newest first).
      */
     public List<MedicalCase> getMedicalHistory(Patient patient) {
-        return medicalCaseRepository.findByPatientOrderByCreatedAtDesc(patient);
+        return medicalCaseRepository.findByPatientOrderByDateDesc(patient);
     }
 
     /**

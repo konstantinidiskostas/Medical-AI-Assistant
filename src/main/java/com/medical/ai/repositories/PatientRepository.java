@@ -1,8 +1,11 @@
 package com.medical.ai.repositories;
 
 import com.medical.ai.entities.Patient;
+import com.medical.ai.entities.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
+
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -25,4 +28,5 @@ public interface PatientRepository extends JpaRepository<Patient, Long> {
      * forcing the developer to safely check for existence before accessing data.
      */
     Optional<Patient> findByAmka(String amka);
+    List<Patient> findByDoctor(User doctor);
 }
