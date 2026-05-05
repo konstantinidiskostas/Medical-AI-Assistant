@@ -35,7 +35,7 @@ public class MedicalCaseController {
      * Endpoint to retrieve the medical history of a specific patient.
      * GET /api/medical-cases/patient/{patientId}
      */
-    @GetMapping("/patient/{patientId}")
+    /*@GetMapping("/patient/{patientId}")
     public List<MedicalCase> getHistory(@PathVariable Long patientId) {
         // 1. Find the patient first using the PatientService
         Patient patient = patientService.getPatientById(patientId)
@@ -43,5 +43,5 @@ public class MedicalCaseController {
 
         // 2. Return the history from the MedicalCaseService
         return medicalCaseService.getMedicalHistory(patient);
-    }
+    }*/
 }

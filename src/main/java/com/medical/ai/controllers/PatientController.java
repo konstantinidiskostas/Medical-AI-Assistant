@@ -23,29 +23,29 @@ public class PatientController {
      * Retrieves a list of all patients registered in the system.
      * @return a list of Patient entities.
      */
-    @GetMapping
-    public List<Patient> getAllPatients() {
-        return patientService.findAll();
-    }
+   // @GetMapping
+   // public List<Patient> getAllPatients() {
+   //     return patientService.findAll();
+    //}
 
     /**
      * Creates and saves a new patient to the database.
      * @param patient the patient data sent in the request body.
      * @return the saved Patient entity.
      */
-    @PostMapping
+   /* @PostMapping
     public Patient createPatient(@RequestBody Patient patient) {
         return patientService.save(patient);
-    }
+    }*/
 
     /**
      * Retrieves a specific patient by their ID.
      * @param id the unique identifier of the patient.
      * @return the Patient entity if found.
      */
-    @GetMapping("/{id}")
+    /*@GetMapping("/{id}")
     public Patient getPatientById(@PathVariable Long id) {
         return patientService.findById(id)
                 .orElseThrow(() -> new RuntimeException("Patient not found with id: " + id));
-    }
+    }*/
 }

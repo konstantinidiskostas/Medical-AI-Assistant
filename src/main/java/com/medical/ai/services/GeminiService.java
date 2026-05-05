@@ -73,14 +73,28 @@ public class GeminiService {
         HttpEntity<String> request = new HttpEntity<>(requestBodyJson.toString(), headers);
 
         try {
-            // Execute the synchronous POST request to the external API
+            // Execute the POST request to the Gemini API
             ResponseEntity<String> response = restTemplate.postForEntity(requestUrl, request, String.class);
 
-            // Return the response body provided by the generative AI model
-            return response.getBody();
+            // Extract the raw JSON payload from the HTTP response body
+            String rawJson = response.getBody();
+
+            // Parse the JSON response to isolate the generated text.
+            // The expected Gemini API response structure is:
+            // { "candidates": [ { "content": { "parts": [ { "text": "..." } ] } } ] }
+            JSONObject jsonObject = new JSONObject(rawJson);
+            String aiDiagnosisText = jsonObject.getJSONArray("candidates")
+                    .getJSONObject(0)
+                    .getJSONObject("content")
+                    .getJSONArray("parts")
+                    .getJSONObject(0)
+                    .getString("text");
+
+            return aiDiagnosisText;
+
         } catch (Exception e) {
-            // Log and return a graceful error message in case of network or API failures
-            return "AI Service Error - Failed to fetch diagnosis: " + e.getMessage();
+            // Catch network errors, API failures, or JSON parsing exceptions
+            return "AI Service Error - Failed to parse diagnosis: " + e.getMessage();
         }
     }
 }
