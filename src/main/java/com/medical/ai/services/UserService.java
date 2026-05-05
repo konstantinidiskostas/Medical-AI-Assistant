@@ -3,6 +3,7 @@ package com.medical.ai.services;
 import com.medical.ai.entities.User;
 import com.medical.ai.repositories.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.Optional;
@@ -31,8 +32,12 @@ public class UserService {
      * @param user The user object with username and password.
      * @return The saved user.
      */
+    @Autowired
+    private PasswordEncoder passwordEncoder; // Inject the encoder
+
     public User registerUser(User user) {
-        // Logic to save the user to the database.
+        // Encode the password before saving to database
+        user.setPassword(passwordEncoder.encode(user.getPassword()));
         return userRepository.save(user);
     }
 

@@ -71,4 +71,13 @@ public class PatientService {
     public Optional<Patient> findById(Long id) {
         return patientRepository.findById(id);
     }
+    /**
+     * Deletes a patient from the database by their ID.
+     * Note: Because of CascadeType.ALL, deleting a patient will also
+     * delete all their associated medical cases (history).
+     * @param id The ID of the patient to delete.
+     */
+    public void deletePatient(Long id) {
+        patientRepository.deleteById(id);
+    }
 }
