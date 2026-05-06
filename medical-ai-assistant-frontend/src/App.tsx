@@ -6,6 +6,7 @@ function App() {
   const [isRegistering, setIsRegistering] = useState(false);
   const [currentView, setCurrentView] = useState(() => localStorage.getItem('app_view') || 'dashboard');
   const [userRole, setUserRole] = useState(() => localStorage.getItem('userRole') || '');
+  const [aiQueryType, setAiQueryType] = useState('Γενική Ερώτηση');
 
   const [doctorId, setDoctorId] = useState<number | null>(() => {
     const saved = localStorage.getItem('doctorId');
@@ -14,9 +15,15 @@ function App() {
 
   const [patients, setPatients] = useState<any[]>([]);
   const [allPendingUsers, setAllPendingUsers] = useState<any[]>([]);
+
+  // Ασφαλής φόρτωση ασθενή για να μην κρασάρει η JSON.parse
   const [selectedPatient, setSelectedPatient] = useState<any>(() => {
-    const saved = localStorage.getItem('selected_patient');
-    return saved ? JSON.parse(saved) : null;
+    try {
+      const saved = localStorage.getItem('selected_patient');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
   });
 
   const [medicalCases, setMedicalCases] = useState<any[]>([]);
@@ -71,6 +78,13 @@ function App() {
     } catch (error) { console.error("Error fetching pending:", error); }
   };
 
+  const fetchMedicalCases = async (patientId: number) => {
+    try {
+      const response = await fetch(`http://localhost:8080/api/medical-cases/patient/${patientId}`, { headers: getAuthHeaders() });
+      if (response.ok) setMedicalCases(await response.json());
+    } catch (error) { console.error("Error fetching cases:", error); }
+  };
+
   const handleApprove = async (userId: number) => {
     try {
       const response = await fetch(`http://localhost:8080/api/users/approve/${userId}`, { method: 'PUT', headers: getAuthHeaders() });
@@ -101,20 +115,20 @@ function App() {
           setCurrentView('dashboard');
           localStorage.setItem('app_view', 'dashboard');
         }
-      } else alert('Λάθος στοιχεία σύνδεσης');
+      } else alert('Λάθος στοιχεία');
     } catch (error) { alert('Σφάλμα σύνδεσης'); }
   };
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!regRole) { alert('Παρακαλώ επιλέξτε ιδιότητα.'); return; }
+    if (!regRole) { alert('Επιλέξτε ιδιότητα.'); return; }
     try {
       const response = await fetch('http://localhost:8080/api/users/register', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ firstName: regFirstName, lastName: regLastName, email: regEmail, username: regUsername, password: regPassword, role: regRole }),
       });
-      if (response.ok) { alert('Επιτυχής εγγραφή!'); setIsRegistering(false); }
-      else alert('Η εγγραφή απέτυχε.');
+      if (response.ok) { alert('Επιτυχής Εγγραφή!'); setIsRegistering(false); }
+      else alert('Σφάλμα εγγραφής.');
     } catch (error) { alert('Σφάλμα δικτύου.'); }
   };
 
@@ -128,7 +142,7 @@ function App() {
   };
 
   const handleAddPatient = async () => {
-    if (!pFirstName || !pLastName || !patientAmka || !patientAge || !patientGender || !patientTelephone) { alert("Συμπληρώστε όλα τα πεδία."); return; }
+    if (!pFirstName || !pLastName || !patientAmka || !patientAge || !patientGender || !patientTelephone) { alert("Παρακαλώ συμπληρώστε όλα τα πεδία."); return; }
     if (!/^\d{11}$/.test(patientAmka)) { alert("Το ΑΜΚΑ πρέπει να είναι 11 ψηφία."); return; }
 
     try {
@@ -136,8 +150,80 @@ function App() {
         method: 'POST', headers: getAuthHeaders(),
         body: JSON.stringify({ firstName: pFirstName, lastName: pLastName, amka: patientAmka, age: parseInt(patientAge), gender: patientGender, telephone: patientTelephone, doctorId: doctorId }),
       });
-      if (response.ok) { alert('Προστέθηκε!'); fetchPatients(); clearPatientForm(); }
-    } catch (error) { alert('Σφάλμα.'); }
+      if (response.ok) { alert('Προστέθηκε επιτυχώς!'); fetchPatients(); clearPatientForm(); }
+    } catch (error) { alert('Σφάλμα κατά την προσθήκη.'); }
+  };
+
+  const handleUpdatePatient = async () => {
+    if (!editingPatient) return;
+    try {
+      const response = await fetch(`http://localhost:8080/api/patients/${editingPatient.patientId}`, {
+        method: 'PUT', headers: getAuthHeaders(),
+        body: JSON.stringify({ firstName: pFirstName, lastName: pLastName, amka: patientAmka, age: parseInt(patientAge) || 0, gender: patientGender, telephone: patientTelephone, doctorId: doctorId }),
+      });
+      if (response.ok) { alert('Ενημερώθηκε!'); setEditingPatient(null); clearPatientForm(); fetchPatients(); }
+    } catch (error) { alert('Σφάλμα ενημέρωσης.'); }
+  };
+
+  const handleDeletePatient = async (id: number) => {
+    if (!window.confirm("Είστε σίγουρος/η ότι θέλετε να διαγράψετε αυτόν τον ασθενή;")) {
+      return;
+    }
+    try {
+      const response = await fetch(`http://localhost:8080/api/patients/${id}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders()
+      });
+      if (response.ok) {
+        alert('Ο ασθενής διαγράφηκε.');
+        fetchPatients();
+      } else {
+        alert('Σφάλμα κατά τη διαγραφή.');
+      }
+    } catch (error) {
+      alert('Σφάλμα δικτύου.');
+    }
+  };
+
+  const handleAskAI = async () => {
+    if (!aiQuery) return;
+    setPendingDiagnosis("Ανάλυση σε εξέλιξη...");
+    try {
+      const response = await fetch('http://localhost:8080/api/ai/query', {
+        method: 'POST', headers: getAuthHeaders(),
+        body: JSON.stringify({ query: `${aiQueryType}: ${aiQuery}` }),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setPendingDiagnosis(data.diagnosis || data.response || data.answer);
+      }
+    } catch (error) { setPendingDiagnosis("Προέκυψε σφάλμα με το AI."); }
+  };
+
+  const handleSaveCase = async () => {
+    if (!selectedPatient || !aiQuery || !pendingDiagnosis) return;
+    try {
+      const response = await fetch('http://localhost:8080/api/medical-cases/save', {
+        method: 'POST', headers: getAuthHeaders(),
+        body: JSON.stringify({ patientId: selectedPatient.patientId, symptoms: aiQuery, diagnosis: pendingDiagnosis }),
+      });
+      if (response.ok) {
+        alert('Το περιστατικό αποθηκεύτηκε!');
+        setAiQuery('');
+        setPendingDiagnosis(null);
+        fetchMedicalCases(selectedPatient.patientId);
+      }
+    } catch (error) { alert('Σφάλμα αποθήκευσης.'); }
+  };
+
+  const startEdit = (p: any) => {
+    setEditingPatient(p);
+    setPFirstName(p.firstName);
+    setPLastName(p.lastName);
+    setPatientAmka(p.amka);
+    setPatientAge(p.age.toString());
+    setPatientGender(p.gender);
+    setPatientTelephone(p.telephone);
   };
 
   const clearPatientForm = () => { setPFirstName(''); setPLastName(''); setPatientAmka(''); setPatientAge(''); setPatientGender(''); setPatientTelephone(''); };
@@ -145,7 +231,13 @@ function App() {
   // --- Life Cycle ---
   useEffect(() => { if (currentView === 'patients') fetchPatients(); }, [currentView, doctorId]);
   useEffect(() => { if (currentView === 'admin-dashboard') fetchPendingUsers(); }, [currentView]);
+  useEffect(() => {
+    if (currentView === 'patient-details' && selectedPatient) {
+      fetchMedicalCases(selectedPatient.patientId);
+    }
+  }, [currentView, selectedPatient]);
 
+  // --- UI RENDER ---
   if (!isLoggedIn) {
     return (
         <div className="min-h-screen flex items-center justify-center bg-[#f7f9fc] p-4 font-sans">
@@ -163,23 +255,22 @@ function App() {
                     <div>
                       <label className="block text-xs font-bold text-slate-500 uppercase mb-1 ml-1">Ιδιότητα</label>
                       <select className="w-full p-3 border border-slate-200 rounded-xl outline-none bg-white focus:ring-2 focus:ring-blue-100" value={regRole} onChange={(e) => setRegRole(e.target.value)} required>
-                        <option value="" disabled>Επιλέξτε ιδιότητα</option>
+                        <option value="" disabled>Επιλέξτε Ιδιότητα</option>
                         <option value="Doctor">Γιατρός</option>
                         <option value="Researcher">Ερευνητής</option>
                         <option value="Admin">Administrator</option>
                       </select>
                     </div>
-                    {/* Εδώ επανέφερα το μήνυμα */}
                     {regRole === 'Admin' && (
                         <div className="bg-amber-50 border border-amber-200 text-amber-700 p-3 rounded-xl text-sm">
-                          ⚠️ <strong>Προσοχή:</strong> Οι λογαριασμοί Admin απαιτούν χειροκίνητη έγκριση από την ομάδα διαχείρισης.
+                          ⚠️ <strong>Προσοχή:</strong> Οι λογαριασμοί Admin χρειάζονται έγκριση.
                         </div>
                     )}
                   </>
               )}
               <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1 ml-1">Username</label><input className="w-full p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-100" placeholder="Username" onChange={e => isRegistering ? setRegUsername(e.target.value) : setUsername(e.target.value)} required /></div>
               <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1 ml-1">Κωδικός</label><input type="password" className="w-full p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-100" placeholder="********" onChange={e => isRegistering ? setRegPassword(e.target.value) : setPassword(e.target.value)} required /></div>
-              <button type="submit" className="w-full bg-blue-600 text-white font-bold p-4 rounded-xl hover:bg-blue-700 transition shadow-lg mt-2">{isRegistering ? 'Εγγραφή' : 'Σύνδεση'}</button>
+              <button type="submit" className="w-full bg-blue-600 text-white font-bold p-4 rounded-xl hover:bg-blue-700 transition shadow-lg mt-2">{isRegistering ? 'Εγγραφή' : 'Είσοδος'}</button>
             </form>
             <div className="w-full mt-8 text-center text-slate-500 text-sm font-medium">
               <p>{isRegistering ? 'Έχετε ήδη λογαριασμό;' : 'Δεν έχετε λογαριασμό;'} <button onClick={() => setIsRegistering(!isRegistering)} className="text-blue-600 font-bold hover:underline ml-1">{isRegistering ? 'Είσοδος' : 'Εγγραφή'}</button></p>
@@ -197,12 +288,14 @@ function App() {
             {userRole && userRole.toLowerCase() === 'admin' && (
                 <button onClick={() => setCurrentView('admin-dashboard')} className="bg-purple-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-purple-700 transition">Admin Panel</button>
             )}
-            <button onClick={handleLogout} className="bg-red-50 text-red-600 px-6 py-2 rounded-xl font-bold hover:bg-red-100 transition">Logout</button>
+            <button onClick={handleLogout} className="bg-red-50 text-red-600 px-6 py-2 rounded-xl font-bold hover:bg-red-100 transition">Αποσύνδεση</button>
           </div>
         </header>
 
         {currentView === 'dashboard' && (
-            <div className="flex gap-4"><button onClick={() => setCurrentView('patients')} className="bg-blue-600 text-white px-8 py-4 rounded-2xl font-bold shadow-lg hover:bg-blue-700 transition">Διαχείριση Ασθενών</button></div>
+            <div className="flex gap-4">
+              <button onClick={() => setCurrentView('patients')} className="bg-blue-600 text-white px-8 py-4 rounded-2xl font-bold shadow-lg hover:bg-blue-700 transition">Διαχείριση Ασθενών</button>
+            </div>
         )}
 
         {currentView === 'admin-dashboard' && (
@@ -216,7 +309,68 @@ function App() {
                     </li>
                 ))}
               </ul>
-              <button onClick={() => setCurrentView('dashboard')} className="mt-8 text-slate-400 font-bold">← Πίσω στο Dashboard</button>
+              <button onClick={() => setCurrentView('dashboard')} className="mt-8 text-slate-400 font-bold">← Επιστροφή στο Dashboard</button>
+            </div>
+        )}
+
+        {currentView === 'patient-details' && (
+            <div className="grid md:grid-cols-2 gap-8 font-sans p-6">
+              {selectedPatient ? (
+                  <>
+                    {/* Αριστερή Στήλη: Στοιχεία & Ιστορικό */}
+                    <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
+                      <button onClick={() => setCurrentView('patients')} className="text-slate-400 hover:text-slate-800 mb-6 font-bold">← Επιστροφή</button>
+                      <h3 className="text-3xl font-bold text-slate-800 mb-1">{selectedPatient.firstName} {selectedPatient.lastName}</h3>
+                      <p className="text-slate-500 mb-8">ΑΜΚΑ: {selectedPatient.amka} | {selectedPatient.age} ετών | {selectedPatient.gender}</p>
+
+                      <h4 className="font-bold text-lg mb-4 text-slate-700">Ιατρικό Ιστορικό</h4>
+                      <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
+                        {medicalCases.length > 0 ? medicalCases.map((m: any) => (
+                            <div key={m.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                              <p className="text-xs text-slate-400 mb-1">{new Date(m.date).toLocaleString()}</p>
+                              <p className="font-medium text-slate-700">{m.diagnosis}</p>
+                            </div>
+                        )) : <p className="text-slate-400">Δεν βρέθηκαν ιστορικά περιστατικά.</p>}
+                      </div>
+                    </div>
+
+                    {/* Δεξιά Στήλη: AI Εργαλείο */}
+                    <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
+                      <h3 className="text-xl font-bold mb-6 text-slate-800">AI Medical Assistant</h3>
+                      <select
+                          className="w-full p-4 border border-slate-200 rounded-2xl mb-4 bg-white"
+                          value={aiQueryType}
+                          onChange={(e) => setAiQueryType(e.target.value)}
+                      >
+                        <option>Γενική Ερώτηση</option>
+                        <option>Ανάλυση Συμπτωμάτων</option>
+                        <option>Επεξήγηση Εξετάσεων</option>
+                        <option>Συμβουλές Πρόληψης</option>
+                      </select>
+
+                      <textarea
+                          className="w-full p-4 border border-slate-200 rounded-2xl h-40 focus:ring-2 focus:ring-blue-100 outline-none transition"
+                          placeholder={`Πληκτρολογήστε εδώ για ${aiQueryType}...`}
+                          value={aiQuery}
+                          onChange={e => setAiQuery(e.target.value)}
+                      />
+
+                      <button onClick={handleAskAI} className="mt-4 w-full bg-blue-600 text-white py-4 rounded-2xl font-bold hover:bg-blue-700 transition shadow-lg">Ανάλυση</button>
+
+                      {pendingDiagnosis && (
+                          <div className="mt-6 p-6 bg-blue-50 rounded-2xl border border-blue-100">
+                            <p className="text-blue-900 leading-relaxed">{pendingDiagnosis}</p>
+                            <button onClick={handleSaveCase} className="block mt-4 font-bold text-green-700 hover:text-green-800 transition">+ Αποθήκευση στο ιστορικό</button>
+                          </div>
+                      )}
+                    </div>
+                  </>
+              ) : (
+                  <div className="col-span-2 text-center p-20">
+                    <p className="text-lg font-bold text-slate-500">Φόρτωση δεδομένων...</p>
+                    <button onClick={() => setCurrentView('patients')} className="mt-4 text-blue-600 font-bold underline">Επιστροφή στη λίστα</button>
+                  </div>
+              )}
             </div>
         )}
 
@@ -230,13 +384,12 @@ function App() {
                   <input className="p-3 border rounded-xl" placeholder="ΑΜΚΑ (11 ψηφία)" value={patientAmka} onChange={e => setPatientAmka(e.target.value)} maxLength={11} />
                   <input className="p-3 border rounded-xl" placeholder="Ηλικία" type="number" value={patientAge} onChange={e => setPatientAge(e.target.value)} />
 
-                  {/* Dropdown για το φύλο */}
                   <select
                       className="p-3 border rounded-xl bg-white w-full"
                       value={patientGender || ''}
                       onChange={e => setPatientGender(e.target.value)}
                   >
-                    <option value="" disabled>Επιλέξτε φύλο</option>
+                    <option value="" disabled>Επιλέξτε Φύλο</option>
                     <option value="Άνδρας">Άνδρας</option>
                     <option value="Γυναίκα">Γυναίκα</option>
                     <option value="Άλλο">Άλλο</option>
@@ -254,14 +407,18 @@ function App() {
                     <li key={p.patientId} className="bg-white p-6 rounded-2xl shadow-sm border flex justify-between items-center transition hover:shadow-md">
                       <span className="font-medium text-lg">{p.firstName} {p.lastName}</span>
                       <div className="flex gap-3">
-                        <button onClick={() => { setSelectedPatient(p); setCurrentView('patient-details'); }} className="text-blue-600 hover:underline transition">Ιστορικό</button>
-                        <button onClick={() => startEdit(p)} className="text-yellow-600 hover:underline transition">Επεξεργασία</button>
-                        <button onClick={() => handleDeletePatient(p.patientId)} className="text-red-500 hover:underline transition">Διαγραφή</button>
+                        <button onClick={() => {
+                          setSelectedPatient(p);
+                          localStorage.setItem('selected_patient', JSON.stringify(p));
+                          setCurrentView('patient-details');
+                        }} className="text-blue-600 hover:underline transition">Καρτέλα ασθενή</button>
+                        <button onClick={() => startEdit(p)} className="text-yellow-600 hover:underline">Επεξεργασία</button>
+                        <button onClick={() => handleDeletePatient(p.patientId)} className="text-red-500 hover:underline">Διαγραφή</button>
                       </div>
                     </li>
                 ))}
               </ul>
-              <button onClick={() => setCurrentView('dashboard')} className="text-slate-500 hover:text-slate-800 transition">← Πίσω στο Dashboard</button>
+              <button onClick={() => setCurrentView('dashboard')} className="text-slate-500 hover:text-slate-800 transition">← Επιστροφή στο Dashboard</button>
             </div>
         )}
       </div>
