@@ -22,10 +22,13 @@ public class Patient {
     private Long patientId;
 
     /**
-     * Patient's full name. Mandatory field.
+     * Patient's first and full name. Mandatory field.
      */
     @Column(nullable = false)
-    private String fullName;
+    private String firstName;
+
+    @Column(nullable = false)
+    private String lastName;
 
     /**
      * Social Security Number (AMKA). Unique identifier for identification.
@@ -71,8 +74,9 @@ public class Patient {
     /**
      * Constructor to initialize a patient with all necessary information.
      */
-    public Patient(String fullName, String amka, int age, String gender, String telephone, User doctor) {
-        this.fullName = fullName;
+    public Patient(String firstName,String lastName, String amka, int age, String gender, String telephone, User doctor) {
+        this.firstName = firstName;
+        this.lastName = lastName;
         this.amka = amka;
         this.age = age;
         this.gender = gender;
@@ -85,8 +89,11 @@ public class Patient {
     public Long getPatientId() { return patientId; }
     public void setPatientId(Long patientId) { this.patientId = patientId; }
 
-    public String getFullName() { return fullName; }
-    public void setFullName(String fullName) { this.fullName = fullName; }
+    public String getFirstName() { return firstName; }
+    public void setFirstName(String firstName) { this.firstName = firstName; }
+
+    public String getLastName() { return lastName; }
+    public void setLastName(String lastName) { this.lastName = lastName; }
 
     public String getAmka() { return amka; }
     public void setAmka(String amka) { this.amka = amka; }

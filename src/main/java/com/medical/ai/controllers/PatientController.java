@@ -39,7 +39,8 @@ public class PatientController {
 
         // 2. Map DTO data to a new Patient entity
         Patient patient = new Patient(
-                request.fullName,
+                request.firstName,
+                request.lastName,
                 request.amka,
                 request.age,
                 request.gender,
@@ -89,7 +90,8 @@ public class PatientController {
                 .orElseThrow(() -> new RuntimeException("Patient not found with id: " + id));
 
         // 2. Update their fields
-        existingPatient.setFullName(request.fullName);
+        existingPatient.setFirstName(request.firstName);
+        existingPatient.setLastName(request.lastName);
         existingPatient.setAmka(request.amka);
         existingPatient.setAge(request.age);
         existingPatient.setGender(request.gender);

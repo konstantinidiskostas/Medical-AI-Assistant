@@ -10,7 +10,8 @@ package com.medical.ai.dtos;
 public class PatientRequest {
 
     // The name of the patient as entered by the doctor
-    public String fullName;
+    public String firstName;
+    public String lastName;
 
     // The patient's Social Security Number (AMKA), used as a unique identifier
     public String amka;
