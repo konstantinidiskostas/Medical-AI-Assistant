@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react';
 
 function App() {
-  // --- States με Persistence (θυμούνται τι είχες πριν το refresh) ---
+  // --- States ---
   const [isLoggedIn, setIsLoggedIn] = useState(() => !!localStorage.getItem('jwtToken'));
   const [isRegistering, setIsRegistering] = useState(false);
   const [currentView, setCurrentView] = useState(() => localStorage.getItem('app_view') || 'dashboard');
-
   const [doctorId, setDoctorId] = useState<number | null>(() => {
     const saved = localStorage.getItem('doctorId');
     return saved ? parseInt(saved) : null;
@@ -25,9 +24,13 @@ function App() {
   // Input states
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [regFullName, setRegFullName] = useState('');
+  const [regFirstName, setRegFirstName] = useState('');
+  const [regLastName, setRegLastName] = useState('');
+  const [regEmail, setRegEmail] = useState('');
   const [regUsername, setRegUsername] = useState('');
   const [regPassword, setRegPassword] = useState('');
+  const [regRole, setRegRole] = useState(''); // ΔΙΟΡΘΩΣΗ: Ξεκινάει κενό
+
   const [patientName, setPatientName] = useState('');
   const [patientAmka, setPatientAmka] = useState('');
   const [patientAge, setPatientAge] = useState('');
@@ -78,20 +81,30 @@ function App() {
         localStorage.setItem('doctorId', data.user.id);
         setDoctorId(data.user.id);
         setIsLoggedIn(true);
-      } else alert('Invalid credentials');
-    } catch (error) { alert('Connection error'); }
+      } else alert('Λάθος στοιχεία σύνδεσης');
+    } catch (error) { alert('Σφάλμα σύνδεσης'); }
   };
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!regRole) { alert('Παρακαλώ επιλέξτε ιδιότητα.'); return; }
     try {
       const response = await fetch('http://localhost:8080/api/users/register', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fullName: regFullName, username: regUsername, password: regPassword, role: 'Doctor' }),
+        body: JSON.stringify({
+          firstName: regFirstName,
+          lastName: regLastName,
+          email: regEmail,
+          username: regUsername,
+          password: regPassword,
+          role: regRole
+        }),
       });
-      if (response.ok) { alert('Επιτυχής εγγραφή!'); setIsRegistering(false); }
-      else alert('Η εγγραφή απέτυχε.');
-    } catch (error) { alert('Σφάλμα.'); }
+      if (response.ok) {
+        alert('Η εγγραφή ολοκληρώθηκε!');
+        setIsRegistering(false);
+      } else alert('Η εγγραφή απέτυχε.');
+    } catch (error) { alert('Σφάλμα δικτύου.'); }
   };
 
   const handleLogout = () => {
@@ -163,24 +176,78 @@ function App() {
           <div className="bg-white p-10 rounded-3xl shadow-2xl w-full max-w-lg border border-slate-100 flex flex-col items-center">
             <div className="text-6xl mb-6">🩺</div>
             <h1 className="text-4xl font-extrabold text-blue-600 mb-2">{isRegistering ? 'Εγγραφή' : 'Είσοδος'}</h1>
-            <p className="text-slate-500 mb-10 text-center">{isRegistering ? 'Δημιουργία νέου λογαριασμού' : 'Καλώς ορίσατε στον Ιατρικό Βοηθό'}</p>
-            <form onSubmit={isRegistering ? handleRegister : handleLogin} className="flex flex-col gap-6 w-full">
-              {isRegistering && (<div><label className="block text-sm font-semibold text-slate-700 mb-1.5">Ονοματεπώνυμο</label><input className="w-full p-3.5 border border-slate-200 rounded-xl outline-none" placeholder="Όνομα" onChange={e => setRegFullName(e.target.value)} required /></div>)}
-              <div><label className="block text-sm font-semibold text-slate-700 mb-1.5">Username</label><input className="w-full p-3.5 border border-slate-200 rounded-xl outline-none" placeholder="Username" onChange={e => isRegistering ? setRegUsername(e.target.value) : setUsername(e.target.value)} required /></div>
-              <div><label className="block text-sm font-semibold text-slate-700 mb-1.5">Κωδικός</label><input type="password" className="w-full p-3.5 border border-slate-200 rounded-xl outline-none" placeholder="********" onChange={e => isRegistering ? setRegPassword(e.target.value) : setPassword(e.target.value)} required /></div>
-              <button type="submit" className="w-full bg-blue-600 text-white font-bold p-4 rounded-xl hover:bg-blue-700 transition shadow-md">{isRegistering ? 'Εγγραφή' : 'Σύνδεση'}</button>
+            <form onSubmit={isRegistering ? handleRegister : handleLogin} className="flex flex-col gap-5 w-full">
+              {isRegistering && (
+                  <>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1 ml-1">Όνομα</label>
+                        <input className="w-full p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-100" placeholder="Όνομα" onChange={e => setRegFirstName(e.target.value)} required />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1 ml-1">Επώνυμο</label>
+                        <input className="w-full p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-100" placeholder="Επώνυμο" onChange={e => setRegLastName(e.target.value)} required />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-500 uppercase mb-1 ml-1">Email</label>
+                      <input type="email" className="w-full p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-100" placeholder="email@example.com" onChange={e => setRegEmail(e.target.value)} required />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-500 uppercase mb-1 ml-1">Ιδιότητα</label>
+                      <select
+                          className="w-full p-3 border border-slate-200 rounded-xl outline-none bg-white focus:ring-2 focus:ring-blue-100"
+                          value={regRole}
+                          onChange={(e) => setRegRole(e.target.value)}
+                          required
+                      >
+                        <option value="" disabled>Επιλέξτε ιδιότητα</option>
+                        <option value="Doctor">Γιατρός</option>
+                        <option value="Researcher">Ερευνητής</option>
+                        <option value="Admin">Administrator</option>
+                      </select>
+                    </div>
+                    {regRole === 'Admin' && (
+                        <div className="bg-amber-50 border border-amber-200 text-amber-700 p-3 rounded-xl text-sm">
+                          ⚠️ <strong>Προσοχή:</strong> Οι λογαριασμοί Admin απαιτούν χειροκίνητη έγκριση.
+                        </div>
+                    )}
+                  </>
+              )}
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1 ml-1">Username</label>
+                <input className="w-full p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-100" placeholder="Username" onChange={e => isRegistering ? setRegUsername(e.target.value) : setUsername(e.target.value)} required />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1 ml-1">Κωδικός</label>
+                <input type="password" className="w-full p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-100" placeholder="********" onChange={e => isRegistering ? setRegPassword(e.target.value) : setPassword(e.target.value)} required />
+              </div>
+
+              <button type="submit" className="w-full bg-blue-600 text-white font-bold p-4 rounded-xl hover:bg-blue-700 transition shadow-lg mt-2">
+                {isRegistering ? 'Εγγραφή' : 'Σύνδεση'}
+              </button>
             </form>
-            <div className="w-full mt-6 text-center text-slate-500"><p>{isRegistering ? 'Έχετε ήδη λογαριασμό;' : 'Δεν έχετε λογαριασμό;'} <button onClick={() => setIsRegistering(!isRegistering)} className="text-blue-600 font-semibold hover:underline">{isRegistering ? 'Είσοδος' : 'Εγγραφή'}</button></p></div>
+
+            <div className="w-full mt-8 text-center text-slate-500 text-sm font-medium">
+              <p>
+                {isRegistering ? 'Έχετε ήδη λογαριασμό;' : 'Δεν έχετε λογαριασμό;'}
+                <button onClick={() => setIsRegistering(!isRegistering)} className="text-blue-600 font-bold hover:underline ml-1">
+                  {isRegistering ? 'Είσοδος' : 'Εγγραφή'}
+                </button>
+              </p>
+            </div>
           </div>
         </div>
     );
   }
 
+  // ... (διατήρησε το υπόλοιπο return για το dashboard/patients όπως ήταν)
   return (
-      <div className="min-h-screen bg-slate-50 p-8">
+      <div className="min-h-screen bg-slate-50 p-8 font-sans">
         <header className="flex justify-between items-center mb-8 bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-          <h1 className="text-3xl font-bold text-slate-800 font-sans">Medical AI Assistant</h1>
-          <button onClick={handleLogout} className="bg-red-50 text-red-600 px-6 py-2 rounded-xl font-semibold hover:bg-red-100 transition">Logout</button>
+          <h1 className="text-3xl font-bold text-slate-800">Medical AI Assistant</h1>
+          <button onClick={handleLogout} className="bg-red-50 text-red-600 px-6 py-2 rounded-xl font-bold hover:bg-red-100 transition">Logout</button>
         </header>
 
         {currentView === 'dashboard' && (
