@@ -260,6 +260,27 @@ function App() {
     setPatientGender(p.gender);
     setPatientTelephone(p.telephone);
   };
+  const handleDeleteCase = async (caseId: number) => {
+    if (!window.confirm("Είστε σίγουρος/η ότι θέλετε να διαγράψετε αυτό το περιστατικό από το ιστορικό;")) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`http://localhost:8080/api/medical-cases/${caseId}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders()
+      });
+
+      if (response.ok) {
+        // Αν πετύχει η διαγραφή, ξανατραβάμε τα περιστατικά για να ανανεωθεί η λίστα
+        fetchMedicalCases(selectedPatient.patientId);
+      } else {
+        alert('Σφάλμα κατά τη διαγραφή του περιστατικού.');
+      }
+    } catch (error) {
+      alert('Προέκυψε σφάλμα επικοινωνίας με τον server.');
+    }
+  };
 
   const clearPatientForm = () => { setPFirstName(''); setPLastName(''); setPatientAmka(''); setPatientAge(''); setPatientGender(''); setPatientTelephone(''); };
 
@@ -445,11 +466,25 @@ function App() {
                       <h4 className="font-bold text-lg mb-4 text-slate-700">Ιατρικό Ιστορικό</h4>
                       <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
                         {medicalCases.length > 0 ? medicalCases.map((m: any) => (
-                            <div key={m.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                            <div key={m.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex flex-col">
                               <p className="text-xs text-slate-400 mb-1">{new Date(m.date).toLocaleString()}</p>
-                              <p className="font-medium text-slate-700">{m.diagnosis}</p>
+
+                              {/* Εδώ βάζεις το formatText αν το έχεις προσθέσει, αλλιώς το αφήνεις m.diagnosis */}
+                              <div className="font-medium text-slate-700 text-sm mb-3">
+                                {m.diagnosis}
+                              </div>
+
+                              {/* Το νέο κουμπί διαγραφής */}
+                              <div className="mt-auto flex justify-end border-t border-slate-200 pt-2">
+                                <button
+                                    onClick={() => handleDeleteCase(m.id)}
+                                    className="text-xs font-bold text-red-500 hover:text-red-700 transition"
+                                >
+                                  Διαγραφή Περιστατικού
+                                </button>
+                              </div>
                             </div>
-                        )) : <p className="text-slate-400">Δεν βρέθηκαν ιστορικά περιστατικά.</p>}
+                        )) : <p className="text-slate-400">Δεν βρέθηκαν παλαιότερα περιστατικά.</p>}
                       </div>
                     </div>
 

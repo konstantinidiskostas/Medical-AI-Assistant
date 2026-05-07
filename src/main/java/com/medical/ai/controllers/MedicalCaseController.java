@@ -89,6 +89,15 @@ public class MedicalCaseController {
             return ResponseEntity.badRequest().build();
         }
     }
+    @DeleteMapping("/{id}")
+    public ResponseEntity<?> deleteMedicalCase(@PathVariable Long id) {
+        try {
+            medicalCaseService.deleteCase(id);
+            return ResponseEntity.ok().build();
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body("Σφάλμα κατά τη διαγραφή.");
+        }
+    }
 }
 
 /**

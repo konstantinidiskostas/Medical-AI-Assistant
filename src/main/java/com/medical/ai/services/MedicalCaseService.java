@@ -36,6 +36,9 @@ public class MedicalCaseService {
         // Here we could add logic like: "Validate that symptoms are not empty"
         return medicalCaseRepository.save(medicalCase);
     }
+    public void deleteCase(Long id) {
+        medicalCaseRepository.deleteById(id);
+    }
 
     /**
      * Retrieves the full medical history for a specific patient.
