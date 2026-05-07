@@ -112,7 +112,7 @@ function App() {
           setCurrentView('admin-dashboard');
           localStorage.setItem('app_view', 'admin-dashboard');
         } else {
-          setCurrentView('dashboard');
+          setCurrentView('patients');
           localStorage.setItem('app_view', 'dashboard');
         }
       } else alert('Λάθος στοιχεία');
@@ -418,7 +418,7 @@ function App() {
                     </li>
                 ))}
               </ul>
-              <button onClick={() => setCurrentView('dashboard')} className="text-slate-500 hover:text-slate-800 transition">← Επιστροφή στο Dashboard</button>
+
             </div>
         )}
       </div>
