@@ -7,14 +7,19 @@ function App() {
   const [currentView, setCurrentView] = useState(() => localStorage.getItem('app_view') || 'dashboard');
   const [userRole, setUserRole] = useState(() => localStorage.getItem('userRole') || '');
   const [aiQueryType, setAiQueryType] = useState('Γενική Ερώτηση');
-
+  const [adminTab, setAdminTab] = useState('users');
+  const [adminPatients, setAdminPatients] = useState<any[]>([]);
+  const [adminCases, setAdminCases] = useState<any[]>([]);
+  const [patients, setPatients] = useState<any[]>([]);
+  const [allPendingUsers, setAllPendingUsers] = useState<any[]>([]);
+  const [allUsers, setAllUsers] = useState<any[]>([]);
   const [doctorId, setDoctorId] = useState<number | null>(() => {
     const saved = localStorage.getItem('doctorId');
     return saved ? parseInt(saved) : null;
   });
 
-  const [patients, setPatients] = useState<any[]>([]);
-  const [allPendingUsers, setAllPendingUsers] = useState<any[]>([]);
+
+
 
   // Ασφαλής φόρτωση ασθενή για να μην κρασάρει η JSON.parse
   const [selectedPatient, setSelectedPatient] = useState<any>(() => {
@@ -70,7 +75,36 @@ function App() {
       } catch (error) { console.error("Error:", error); }
     }
   };
+  const fetchAdminPatients = async () => {
+    try {
+      const response = await fetch('http://localhost:8080/api/patients', { headers: getAuthHeaders() });
+      if (response.ok) setAdminPatients(await response.json());
+    } catch (error) { console.error("Error fetching all patients:", error); }
+  };
 
+  const fetchAdminCases = async () => {
+    try {
+      const response = await fetch('http://localhost:8080/api/medical-cases', { headers: getAuthHeaders() });
+      if (response.ok) setAdminCases(await response.json());
+    } catch (error) { console.error("Error fetching all cases:", error); }
+  };
+
+  useEffect(() => {
+    if (currentView === 'admin-dashboard') {
+      if (adminTab === 'users') {
+        fetchPendingUsers();
+        fetchAllUsers();
+      }
+      if (adminTab === 'patients') fetchAdminPatients();
+      if (adminTab === 'cases') fetchAdminCases();
+    }
+  }, [currentView, adminTab]);
+  const fetchAllUsers = async () => {
+    try {
+      const response = await fetch('http://localhost:8080/api/users', { headers: getAuthHeaders() });
+      if (response.ok) setAllUsers(await response.json());
+    } catch (error) { console.error("Error fetching all users:", error); }
+  };
   const fetchPendingUsers = async () => {
     try {
       const response = await fetch('http://localhost:8080/api/users/pending', { headers: getAuthHeaders() });
@@ -285,9 +319,7 @@ function App() {
         <header className="flex justify-between items-center mb-8 bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
           <h1 className="text-3xl font-bold text-slate-800">Medical AI Assistant</h1>
           <div className="flex gap-4">
-            {userRole && userRole.toLowerCase() === 'admin' && (
-                <button onClick={() => setCurrentView('admin-dashboard')} className="bg-purple-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-purple-700 transition">Admin Panel</button>
-            )}
+
             <button onClick={handleLogout} className="bg-red-50 text-red-600 px-6 py-2 rounded-xl font-bold hover:bg-red-100 transition">Αποσύνδεση</button>
           </div>
         </header>
@@ -299,19 +331,97 @@ function App() {
         )}
 
         {currentView === 'admin-dashboard' && (
-            <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
-              <h2 className="text-2xl font-bold mb-6">Διαχείριση Χρηστών (Pending Approval)</h2>
-              <ul className="space-y-4">
-                {allPendingUsers.map((u: any) => (
-                    <li key={u.id} className="p-4 border rounded-xl flex justify-between items-center">
-                      <span>{u.firstName} {u.lastName} ({u.username})</span>
-                      <button onClick={() => handleApprove(u.id)} className="bg-green-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-green-700">Έγκριση</button>
-                    </li>
-                ))}
-              </ul>
-              <button onClick={() => setCurrentView('dashboard')} className="mt-8 text-slate-400 font-bold">← Επιστροφή στο Dashboard</button>
+            <div className="space-y-6 max-w-6xl mx-auto">
+
+
+              {/* Tabs Menu */}
+              <div className="flex gap-4 border-b border-slate-200 pb-4 mb-6">
+                <button onClick={() => setAdminTab('users')} className={`px-6 py-3 rounded-xl font-bold transition shadow-sm ${adminTab === 'users' ? 'bg-purple-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}`}>Χρήστες</button>
+                <button onClick={() => setAdminTab('patients')} className={`px-6 py-3 rounded-xl font-bold transition shadow-sm ${adminTab === 'patients' ? 'bg-purple-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}`}>Ασθενείς</button>
+                <button onClick={() => setAdminTab('cases')} className={`px-6 py-3 rounded-xl font-bold transition shadow-sm ${adminTab === 'cases' ? 'bg-purple-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}`}>Περιστατικά</button>
+              </div>
+
+              {/* Tab: Users */}
+
+              {/* Tab: Users */}
+              {adminTab === 'users' && (
+                  <div className="space-y-8">
+                    {/* 1. Εκκρεμείς Εγκρίσεις */}
+
+
+                    {/* 2. Ενεργοί Χρήστες του Συστήματος */}
+
+                    <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
+                      <h3 className="text-xl font-bold mb-6 text-slate-700">Ενεργοί Χρήστες (Γιατροί, Admin κλπ)</h3>
+                      <ul className="grid gap-4">
+                        {allUsers.length > 0 ? allUsers.map((u: any) => (
+                            <li key={u.id} className="bg-slate-50 p-6 rounded-2xl border border-slate-100 flex justify-between items-center">
+                              <div>
+                                <span className="font-bold text-lg text-slate-800">{u.firstName} {u.lastName}</span>
+                                <p className="text-sm text-slate-500 mt-1">Ρόλος: {u.role} | Username: {u.username} | Email: {u.email}</p>
+                              </div>
+                              {/* Κουμπί διαγραφής στα δεξιά, όπως ακριβώς στους ασθενείς */}
+                              <button onClick={() => handleDeleteUser(u.id)} className="text-red-500 font-bold hover:underline transition">Διαγραφή</button>
+                            </li>
+                        )) : <p className="text-slate-500 font-medium">Δεν βρέθηκαν εγγεγραμμένοι χρήστες (ή λείπει το Endpoint στο Backend).</p>}
+                      </ul>
+                    </div>
+                    <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
+                      <h3 className="text-xl font-bold mb-6 text-slate-700">Εκκρεμείς Εγκρίσεις ({allPendingUsers.length})</h3>
+                      <ul className="space-y-4">
+                        {allPendingUsers.length > 0 ? allPendingUsers.map((u: any) => (
+                            <li key={u.id} className="p-5 border border-slate-100 bg-slate-50 rounded-2xl flex justify-between items-center">
+                              <div>
+                                <span className="font-bold text-lg block text-slate-800">{u.firstName} {u.lastName}</span>
+                                <span className="text-sm text-slate-500">@{u.username} • Ιδιότητα: {u.role}</span>
+                              </div>
+                              <button onClick={() => handleApprove(u.id)} className="bg-green-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-green-700 shadow-sm transition">Έγκριση</button>
+                            </li>
+                        )) : <p className="text-slate-500 font-medium">Δεν υπάρχουν νέοι χρήστες προς έγκριση.</p>}
+                      </ul>
+                    </div>
+                  </div>
+              )}
+              {/* Tab: Patients */}
+              {adminTab === 'patients' && (
+                  <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
+                    <h3 className="text-xl font-bold mb-6 text-slate-700">Βάση Δεδομένων Ασθενών</h3>
+                    <ul className="grid gap-4">
+                      {adminPatients.length > 0 ? adminPatients.map((p: any) => (
+                          <li key={p.patientId} className="bg-slate-50 p-6 rounded-2xl border border-slate-100 flex justify-between items-center">
+                            <div>
+                              <span className="font-bold text-lg text-slate-800">{p.firstName} {p.lastName}</span>
+                              <p className="text-sm text-slate-500 mt-1">ΑΜΚΑ: {p.amka} | Ηλικία: {p.age} | Φύλο: {p.gender}</p>
+                            </div>
+                            <button onClick={() => handleDeletePatient(p.patientId)} className="text-red-500 font-bold hover:underline transition">Διαγραφή</button>
+                          </li>
+                      )) : <p className="text-slate-500 font-medium">Δεν βρέθηκαν ασθενείς ή εκκρεμεί το API στο Backend.</p>}
+                    </ul>
+                  </div>
+              )}
+
+
+              {/* Tab: Cases */}
+              {adminTab === 'cases' && (
+                  <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
+                    <h3 className="text-xl font-bold mb-6 text-slate-700">Αρχείο Ιατρικών Περιστατικών</h3>
+                    <ul className="grid md:grid-cols-2 gap-4">
+                      {adminCases.length > 0 ? adminCases.map((c: any) => (
+                          <li key={c.id} className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
+                            <p className="text-xs font-bold text-purple-600 mb-2">{new Date(c.date).toLocaleString()}</p>
+                            <p className="font-medium text-slate-800 mb-3">{c.diagnosis}</p>
+                            <div className="bg-white p-3 rounded-xl border border-slate-100">
+                              <p className="text-xs text-slate-400 uppercase font-bold mb-1">Συμπτωματα/Ερωτημα:</p>
+                              <p className="text-sm text-slate-600">{c.symptoms}</p>
+                            </div>
+                          </li>
+                      )) : <p className="text-slate-500 font-medium col-span-2">Δεν βρέθηκαν περιστατικά ή εκκρεμεί το API στο Backend.</p>}
+                    </ul>
+                  </div>
+              )}
             </div>
         )}
+
 
         {currentView === 'patient-details' && (
             <div className="grid md:grid-cols-2 gap-8 font-sans p-6">
@@ -421,6 +531,7 @@ function App() {
 
             </div>
         )}
+
       </div>
   );
 }

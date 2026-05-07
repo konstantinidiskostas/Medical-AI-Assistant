@@ -1,6 +1,9 @@
 package com.medical.ai.entities;
 
+import com.medical.ai.repositories.UserRepository;
 import jakarta.persistence.*;
+
+import java.util.List;
 
 /**
  * Entity class representing a User in the system.
@@ -89,4 +92,5 @@ public class User {
 
     public String getRole() { return role; }
     public void setRole(String role) { this.role = role; }
+
 }

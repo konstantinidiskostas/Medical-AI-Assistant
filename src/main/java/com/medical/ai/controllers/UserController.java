@@ -10,6 +10,8 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 /**
  * REST Controller for handling user registration and authentication processes.
  */
@@ -68,5 +70,10 @@ public class UserController {
             // Return 401 Unauthorized if authentication fails
             return ResponseEntity.status(401).body("Invalid username or password");
         }
+    }
+    @GetMapping
+    public ResponseEntity<List<User>> getAllUsers() {
+        List<User> users = userService.getAllUsers();
+        return ResponseEntity.ok(users);
     }
 }
