@@ -55,6 +55,7 @@ function App() {
   const [patientTelephone, setPatientTelephone] = useState('');
 
   // --- Helpers ---
+
   useEffect(() => { localStorage.setItem('app_view', currentView); }, [currentView]);
   useEffect(() => {
     if (selectedPatient) localStorage.setItem('selected_patient', JSON.stringify(selectedPatient));
@@ -352,7 +353,7 @@ function App() {
                     {/* 2. Ενεργοί Χρήστες του Συστήματος */}
 
                     <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
-                      <h3 className="text-xl font-bold mb-6 text-slate-700">Ενεργοί Χρήστες (Γιατροί, Admin κλπ)</h3>
+
                       <ul className="grid gap-4">
                         {allUsers.length > 0 ? allUsers.map((u: any) => (
                             <li key={u.id} className="bg-slate-50 p-6 rounded-2xl border border-slate-100 flex justify-between items-center">
@@ -385,7 +386,7 @@ function App() {
               {/* Tab: Patients */}
               {adminTab === 'patients' && (
                   <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
-                    <h3 className="text-xl font-bold mb-6 text-slate-700">Βάση Δεδομένων Ασθενών</h3>
+
                     <ul className="grid gap-4">
                       {adminPatients.length > 0 ? adminPatients.map((p: any) => (
                           <li key={p.patientId} className="bg-slate-50 p-6 rounded-2xl border border-slate-100 flex justify-between items-center">
@@ -404,18 +405,26 @@ function App() {
               {/* Tab: Cases */}
               {adminTab === 'cases' && (
                   <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
-                    <h3 className="text-xl font-bold mb-6 text-slate-700">Αρχείο Ιατρικών Περιστατικών</h3>
-                    <ul className="grid md:grid-cols-2 gap-4">
+
+                    <ul className="grid gap-4">
                       {adminCases.length > 0 ? adminCases.map((c: any) => (
-                          <li key={c.id} className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
-                            <p className="text-xs font-bold text-purple-600 mb-2">{new Date(c.date).toLocaleString()}</p>
-                            <p className="font-medium text-slate-800 mb-3">{c.diagnosis}</p>
-                            <div className="bg-white p-3 rounded-xl border border-slate-100">
-                              <p className="text-xs text-slate-400 uppercase font-bold mb-1">Συμπτωματα/Ερωτημα:</p>
-                              <p className="text-sm text-slate-600">{c.symptoms}</p>
+                          <li key={c.id} className="bg-slate-50 p-6 rounded-2xl border border-slate-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                            <div className="flex-1 w-full">
+                              <span className="text-sm font-bold text-purple-600 mb-1 block">
+                                {new Date(c.date).toLocaleString()}
+                              </span>
+                              <span className="font-bold text-lg text-slate-800 block mb-3">
+                                Διάγνωση/Απάντηση: {c.diagnosis}
+                              </span>
+                              <div className="bg-white p-4 rounded-xl border border-slate-100">
+                                <p className="text-xs text-slate-400 uppercase font-bold mb-1">Ερωτημα / Συμπτωματα:</p>
+                                <p className="text-sm text-slate-600">{c.symptoms}</p>
+                              </div>
                             </div>
+                            {/* Αν στο μέλλον θες κουμπί διαγραφής περιστατικού, το βάζεις εδώ */}
+                            {/* <button className="text-red-500 font-bold hover:underline transition">Διαγραφή</button> */}
                           </li>
-                      )) : <p className="text-slate-500 font-medium col-span-2">Δεν βρέθηκαν περιστατικά ή εκκρεμεί το API στο Backend.</p>}
+                      )) : <p className="text-slate-500 font-medium">Δεν βρέθηκαν περιστατικά ή εκκρεμεί το API στο Backend.</p>}
                     </ul>
                   </div>
               )}

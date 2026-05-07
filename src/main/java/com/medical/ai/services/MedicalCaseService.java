@@ -46,6 +46,9 @@ public class MedicalCaseService {
     public List<MedicalCase> getMedicalHistory(Patient patient) {
         return medicalCaseRepository.findByPatientOrderByDateDesc(patient);
     }
+    public List<MedicalCase> getAllCases() {
+        return medicalCaseRepository.findAll();
+    }
 
     /**
      * TODO: This will be the "bridge" to the AI.

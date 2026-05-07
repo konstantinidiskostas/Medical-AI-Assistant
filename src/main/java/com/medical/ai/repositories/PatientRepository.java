@@ -28,5 +28,5 @@ public interface PatientRepository extends JpaRepository<Patient, Long> {
      * forcing the developer to safely check for existence before accessing data.
      */
     Optional<Patient> findByAmka(String amka);
-    List<Patient> findByDoctor(User doctor);
+    List<Patient> findByDoctorId(Long id);
 }

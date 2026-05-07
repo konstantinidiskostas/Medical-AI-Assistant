@@ -5,6 +5,7 @@ import com.medical.ai.entities.Patient;
 import com.medical.ai.services.MedicalCaseService;
 import com.medical.ai.services.PatientService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
@@ -78,6 +79,15 @@ public class MedicalCaseController {
 
         // Return the history list sorted by date (handled in the Service/Repository layer)
         return medicalCaseService.getMedicalHistory(patient);
+    }
+    @GetMapping
+    public ResponseEntity<List<MedicalCase>> getAllCases() {
+        try {
+            List<MedicalCase> cases = medicalCaseService.getAllCases();
+            return ResponseEntity.ok(cases);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().build();
+        }
     }
 }
 

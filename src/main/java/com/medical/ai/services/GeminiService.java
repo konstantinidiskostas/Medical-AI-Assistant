@@ -10,52 +10,51 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
-/**
- * Service class responsible for handling integration with the Google Gemini AI API.
- * It manages the construction of HTTP requests, payload formatting, and error handling
- * for AI-assisted medical diagnoses.
- */
 @Service
 public class GeminiService {
 
-    /**
-     * The API key for authenticating with Google services.
-     * Injected securely from application.properties (resolved via environment variables).
-     */
     @Value("${gemini.api.key}")
     private String apiKey;
 
-    /**
-     * The endpoint URL for the Gemini API model.
-     * Injected from application.properties.
-     */
     @Value("${gemini.api.url}")
     private String apiUrl;
 
-    /**
-     * Sends patient symptoms to the AI model to retrieve a preliminary diagnosis.
-     * * @param symptoms A string describing the symptoms reported by the patient.
-     * @return The AI's response payload as a raw JSON string, or an error message if the API call fails.
-     */
-    public String getAiDiagnosis(String symptoms) {
+    public String getAiDiagnosis(String incomingQuery) {
         RestTemplate restTemplate = new RestTemplate();
-
-        // Append the authentication key as a query parameter to the base URL
         String requestUrl = apiUrl + "?key=" + apiKey;
 
-        // Configure HTTP headers to indicate a JSON payload
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
 
-        // Define the prompt instructing the AI on its persona and objective
-        String prompt = "You are an experienced medical doctor. The patient reports the following symptoms: "
-                + symptoms +
-                ". Based on this information, provide a concise preliminary diagnosis and a confidence score.";
+        // --- PROMPT ENGINEERING ΣΤΟ BACKEND ---
+        String engineeredPrompt = "";
+        String baseRole = "Δράσε ως ένας κορυφαίος ιατρός και σύμβουλος υγείας AI. Απάντησε στα Ελληνικά στον γιατρό που χειρίζεται το εργαλείο. ";
 
-        // Construct the expected JSON payload structure using the org.json library.
-        // Required API structure: { "contents": [ { "parts": [ { "text": "prompt" } ] } ] }
+        if (incomingQuery.startsWith("Ανάλυση Συμπτωμάτων:")) {
+            String actualQuery = incomingQuery.replace("Ανάλυση Συμπτωμάτων:", "").trim();
+            engineeredPrompt = baseRole + "Ο ασθενής αναφέρει τα εξής συμπτώματα: '" + actualQuery + "'. "
+                    + "Δώσε μια δομημένη απάντηση που να περιλαμβάνει: 1) Πιθανή Διάγνωση, 2) Αιτιολόγηση (Confidence Score), 3) Προτεινόμενες ενέργειες/εξετάσεις. "
+                    + "Χρησιμοποίησε έντονα γράμματα (**κείμενο**) για τις επικεφαλίδες.";
+
+        } else if (incomingQuery.startsWith("Επεξήγηση Εξετάσεων:")) {
+            String actualQuery = incomingQuery.replace("Επεξήγηση Εξετάσεων:", "").trim();
+            engineeredPrompt = baseRole + "Εξήγησε τα παρακάτω αποτελέσματα εξετάσεων με απλά και κατανοητά λόγια για τον γιατρό: '" + actualQuery + "'. "
+                    + "Δώσε έμφαση σε τυχόν τιμές εκτός φυσιολογικών ορίων.";
+
+        } else if (incomingQuery.startsWith("Συμβουλές Πρόληψης:")) {
+            String actualQuery = incomingQuery.replace("Συμβουλές Πρόληψης:", "").trim();
+            engineeredPrompt = baseRole + "Με βάση το παρακάτω ερώτημα: '" + actualQuery + "', "
+                    + "δώσε εξατομικευμένες συμβουλές πρόληψης και υγιεινής ζωής σε μορφή λίστας.";
+
+        } else {
+            // Αν είναι "Γενική Ερώτηση" ή οτιδήποτε άλλο
+            String actualQuery = incomingQuery.replace("Γενική Ερώτηση:", "").trim();
+            engineeredPrompt = baseRole + "Απάντησε με σαφήνεια και επαγγελματισμό στην εξής ιατρική ερώτηση: '" + actualQuery + "'.";
+        }
+
+        // Φτιάχνουμε το JSON που περιμένει η Google
         JSONObject part = new JSONObject();
-        part.put("text", prompt);
+        part.put("text", engineeredPrompt);
 
         JSONArray partsArray = new JSONArray();
         partsArray.put(part);
@@ -69,32 +68,22 @@ public class GeminiService {
         JSONObject requestBodyJson = new JSONObject();
         requestBodyJson.put("contents", contentsArray);
 
-        // Encapsulate the JSON payload and headers into an HttpEntity instance
         HttpEntity<String> request = new HttpEntity<>(requestBodyJson.toString(), headers);
 
         try {
-            // Execute the POST request to the Gemini API
             ResponseEntity<String> response = restTemplate.postForEntity(requestUrl, request, String.class);
-
-            // Extract the raw JSON payload from the HTTP response body
             String rawJson = response.getBody();
 
-            // Parse the JSON response to isolate the generated text.
-            // The expected Gemini API response structure is:
-            // { "candidates": [ { "content": { "parts": [ { "text": "..." } ] } } ] }
             JSONObject jsonObject = new JSONObject(rawJson);
-            String aiDiagnosisText = jsonObject.getJSONArray("candidates")
+            return jsonObject.getJSONArray("candidates")
                     .getJSONObject(0)
                     .getJSONObject("content")
                     .getJSONArray("parts")
                     .getJSONObject(0)
                     .getString("text");
 
-            return aiDiagnosisText;
-
         } catch (Exception e) {
-            // Catch network errors, API failures, or JSON parsing exceptions
-            return "AI Service Error - Failed to parse diagnosis: " + e.getMessage();
+            return "Σφάλμα AI: Προέκυψε πρόβλημα με την ανάλυση (" + e.getMessage() + "). Δοκιμάστε ξανά σε λίγο.";
         }
     }
 }
