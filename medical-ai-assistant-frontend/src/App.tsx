@@ -33,7 +33,7 @@ function App() {
 
   const [medicalCases, setMedicalCases] = useState<any[]>([]);
   const [aiQuery, setAiQuery] = useState('');
-  const [pendingDiagnosis, setPendingDiagnosis] = useState<string | null>(null);
+  const [pendingDiagnosis, setPendingDiagnosis] = useState<any | null>(null);
   const [editingPatient, setEditingPatient] = useState<any>(null);
 
   // Auth Inputs

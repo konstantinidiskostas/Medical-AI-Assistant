@@ -26,22 +26,35 @@ public class GeminiService {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
 
-        // --- PROMPT ENGINEERING ΣΤΟ BACKEND ---
-        // --- PROMPT ENGINEERING ΣΤΟ BACKEND ---
+        // 1. Δημιουργούμε ΠΡΩΤΑ το αντικείμενο
+        JSONObject requestBodyJson = new JSONObject();
+
+        // 2. Φτιάχνουμε το config για το JSON output
+        JSONObject generationConfig = new JSONObject();
+        generationConfig.put("response_mime_type", "application/json");
+
+        // 3. Το βάζουμε στο body
+        requestBodyJson.put("generationConfig", generationConfig);
         String engineeredPrompt = "";
+        // Προσθήκη στις ρυθμίσεις του JSON για να αναγκάσουμε το output να είναι JSON
 
+        generationConfig.put("response_mime_type", "application/json");
+
+        requestBodyJson.put("generationConfig", generationConfig);
         // Ο 'Αυστηρός' Ρόλος και οι Απαγορεύσεις (Negative Prompts)
-        String baseRole = "Δράσε αυστηρά ως επαγγελματίας ιατρικός αναλυτής AI. Απάντησε αποκλειστικά στα Ελληνικά. "
-                + "ΑΥΣΤΗΡΟΣ ΚΑΝΟΝΑΣ: ΜΗΝ χρησιμοποιείς ΠΟΤΕ χαιρετισμούς, προλόγους, επιλόγους ή φιλοφρονήσεις (π.χ. 'Αγαπητέ συνάδελφε', 'Χαίρετε', 'Βεβαίως', 'Ελπίζω να βοήθησα'). "
-                + "Ξεκίνα κατευθείαν με την ιατρική ανάλυση. Το ύφος σου πρέπει να είναι απόλυτα κλινικό, αντικειμενικό και επιστημονικό. ";
+        // 1. Το νέο Base Role που επιβάλλει JSON
+        String baseRole = "Είσαι ένας εξειδικευμένος ιατρικός βοηθός AI. "
+                + "Απάντησε ΑΠΟΚΛΕΙΣΤΙΚΑ σε μορφή JSON. Μην συμπεριλάβεις κανένα άλλο κείμενο πριν ή μετά το JSON, ούτε markdown αστεράκια. "
+                + "Το JSON πρέπει να έχει ακριβώς αυτή τη δομή: "
+                + "{\"diagnosis\": \"...\", \"confidence\": \"...\", \"analysis\": \"...\", \"recommendations\": [], \"red_flags\": []}. ";
 
+// 2. Εστίαση στην Ανάλυση Συμπτωμάτων (που είναι το κύριο case σου)
         if (incomingQuery.startsWith("Ανάλυση Συμπτωμάτων:")) {
             String actualQuery = incomingQuery.replace("Ανάλυση Συμπτωμάτων:", "").trim();
-            engineeredPrompt = baseRole + "Αναφερόμενα συμπτώματα ασθενούς: '" + actualQuery + "'. "
-                    + "Δώσε την ανάλυση αυστηρά με την εξής δομή: "
-                    + "1) **Πιθανή Διάγνωση:** (σύντομα) "
-                    + "2) **Confidence Score:** (κλίμακα 1-10 και 1 γραμμή αιτιολόγηση) "
-                    + "3) **Προτεινόμενες Ενέργειες/Εξετάσεις:** (σε μορφή λίστας).";
+            engineeredPrompt = baseRole + "Ανάλυσε τα εξής συμπτώματα: '" + actualQuery + "'. "
+                    + "Στο πεδίο recommendations βάλε μια λίστα από ιατρικές εξετάσεις. "
+                    + "Στο πεδίο red_flags βάλε κρίσιμα σημεία προσοχής.";
+
 
         } else if (incomingQuery.startsWith("Επεξήγηση Εξετάσεων:")) {
             String actualQuery = incomingQuery.replace("Επεξήγηση Εξετάσεων:", "").trim();
@@ -72,7 +85,7 @@ public class GeminiService {
         JSONArray contentsArray = new JSONArray();
         contentsArray.put(content);
 
-        JSONObject requestBodyJson = new JSONObject();
+        requestBodyJson = new JSONObject();
         requestBodyJson.put("contents", contentsArray);
 
         HttpEntity<String> request = new HttpEntity<>(requestBodyJson.toString(), headers);
