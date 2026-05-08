@@ -13,6 +13,7 @@ function App() {
   const [patients, setPatients] = useState<any[]>([]);
   const [allPendingUsers, setAllPendingUsers] = useState<any[]>([]);
   const [allUsers, setAllUsers] = useState<any[]>([]);
+  const [selectedCase, setSelectedCase] = useState<any | null>(null);
   const [doctorId, setDoctorId] = useState<number | null>(() => {
     const saved = localStorage.getItem('doctorId');
     return saved ? parseInt(saved) : null;
@@ -263,18 +264,39 @@ function App() {
 
   const handleSaveCase = async () => {
     if (!selectedPatient || !aiQuery || !pendingDiagnosis) return;
+
+    // Μετατρέπουμε το αντικείμενο σε ένα όμορφο κείμενο για να αποθηκευτεί στη βάση
+    const diagnosisToSave = typeof pendingDiagnosis === 'object'
+        ? `ΔΙΑΓΝΩΣΗ: ${pendingDiagnosis.diagnosis}\n` +
+        `CONFIDENCE: ${pendingDiagnosis.confidence}\n` +
+        `ΑΝΑΛΥΣΗ: ${pendingDiagnosis.analysis}\n` +
+        `ΠΡΟΤΑΣΕΙΣ: ${pendingDiagnosis.recommendations?.join(", ")}\n` +
+        `RED FLAGS: ${pendingDiagnosis.red_flags?.join(", ")}`
+        : pendingDiagnosis;
+
     try {
       const response = await fetch('http://localhost:8080/api/medical-cases/save', {
-        method: 'POST', headers: getAuthHeaders(),
-        body: JSON.stringify({ patientId: selectedPatient.patientId, symptoms: aiQuery, diagnosis: pendingDiagnosis, type: aiQueryType }),
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          patientId: selectedPatient.patientId,
+          symptoms: aiQuery,
+          diagnosis: diagnosisToSave, // Στέλνουμε το κείμενο, όχι το object
+          type: aiQueryType
+        }),
       });
+
       if (response.ok) {
-        alert('Το περιστατικό αποθηκεύτηκε!');
+        alert('Το περιστατικό αποθηκεύτηκε επιτυχώς!');
         setAiQuery('');
         setPendingDiagnosis(null);
         fetchMedicalCases(selectedPatient.patientId);
+      } else {
+        alert('Αποτυχία αποθήκευσης στον server.');
       }
-    } catch (error) { alert('Σφάλμα αποθήκευσης.'); }
+    } catch (error) {
+      alert('Σφάλμα σύνδεσης κατά την αποθήκευση.');
+    }
   };
 
   const startEdit = (p: any) => {
@@ -483,132 +505,206 @@ function App() {
             <div className="grid md:grid-cols-2 gap-8 font-sans p-6">
               {selectedPatient ? (
                   <>
-                    {/* Αριστερή Στήλη: Στοιχεία & Ιστορικό */}
-                    <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
-                      <button onClick={() => setCurrentView('patients')} className="text-slate-400 hover:text-slate-800 mb-6 font-bold">← Επιστροφή</button>
-                      <h3 className="text-3xl font-bold text-slate-800 mb-1">{selectedPatient.firstName} {selectedPatient.lastName}</h3>
-                      <p className="text-slate-500 mb-8">ΑΜΚΑ: {selectedPatient.amka} | {selectedPatient.age} ετών | {selectedPatient.gender}</p>
+                    {/* ΑΡΙΣΤΕΡΗ ΣΤΗΛΗ: ΠΡΟΦΙΛ & ΙΣΤΟΡΙΚΟ */}
+                    <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 flex flex-col h-fit">
+                      <button
+                          onClick={() => setCurrentView('patients')}
+                          className="text-slate-400 hover:text-slate-800 mb-6 font-bold flex items-center gap-2 transition"
+                      >
+                        ← Επιστροφή στους ασθενείς
+                      </button>
 
-                      <h4 className="font-bold text-lg mb-4 text-slate-700">Ιατρικό Ιστορικό</h4>
-                      <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
-                        {medicalCases.length > 0 ? medicalCases.map((m: any) => (
-                            <div key={m.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex flex-col">
-                              <p className="text-xs text-slate-400 mb-1">{new Date(m.date).toLocaleString()}</p>
+                      <div className="mb-8">
+                        <h3 className="text-3xl font-bold text-slate-800 mb-1">
+                          {selectedPatient.firstName} {selectedPatient.lastName}
+                        </h3>
+                        <p className="text-slate-500 font-medium">
+                          AMKA: {selectedPatient.amka} | {selectedPatient.age} ετών | {selectedPatient.gender}
+                        </p>
+                      </div>
 
-                              {/* Εδώ βάζεις το formatText αν το έχεις προσθέσει, αλλιώς το αφήνεις m.diagnosis */}
-                              <div className="font-medium text-slate-700 text-sm mb-3">
-                                {m.diagnosis}
-                              </div>
+                      <h4 className="font-bold text-lg mb-4 text-slate-700 flex justify-between items-center border-t pt-6">
+                        Ιστορικό Περιστατικών
+                        <span className="text-xs bg-slate-100 px-3 py-1 rounded-full text-slate-500 font-medium">
+              {medicalCases.length} εγγραφές
+            </span>
+                      </h4>
 
-                              {/* Το νέο κουμπί διαγραφής */}
-                              <div className="mt-auto flex justify-end border-t border-slate-200 pt-2">
-                                <button
-                                    onClick={() => handleDeleteCase(m.id)}
-                                    className="text-xs font-bold text-red-500 hover:text-red-700 transition"
-                                >
-                                  Διαγραφή Περιστατικού
-                                </button>
-                              </div>
+                      <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+                        {medicalCases.length > 0 ? (
+                            medicalCases.map((m: any) => {
+                              // Logic για την εξαγωγή του Preview και του Score από το κείμενο
+                              const diagMatch = m.diagnosis.match(/ΔΙΑΓΝΩΣΗ: (.*?)\n/);
+                              const scoreMatch = m.diagnosis.match(/CONFIDENCE: (.*?)\n/);
+
+                              const previewText = diagMatch ? diagMatch[1] : (m.diagnosis.length > 60 ? m.diagnosis.substring(0, 60) + "..." : m.diagnosis);
+                              const confidenceScore = scoreMatch ? scoreMatch[1] : "N/A";
+
+                              return (
+                                  <div
+                                      key={m.id}
+                                      onClick={() => setSelectedCase(m)} // <--- Πρόσθεσε αυτό
+                                      className="group cursor-pointer bg-slate-50/50 border border-slate-100 rounded-2xl p-4 hover:shadow-md hover:border-blue-100 transition-all duration-200"
+                                  >
+                                    <div className="flex items-start justify-between gap-3">
+
+                                      {/* Στήλη 1: Ημερομηνία & Badge */}
+                                      <div className="min-w-[90px] flex flex-col gap-1">
+                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">
+                                          {new Date(m.date).toLocaleDateString('el-GR')}
+                                        </p>
+                                        <span className="inline-block px-2 py-0.5 bg-blue-50 text-[9px] font-bold text-blue-600 rounded-md uppercase self-start border border-blue-100/50">
+                          {m.type || "Γενική"}
+                        </span>
+                                      </div>
+
+                                      {/* Στήλη 2: Ερώτηση & Προεπισκόπηση */}
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-[10px] text-slate-400 font-bold uppercase mb-0.5 truncate">
+                                          {m.symptoms}
+                                        </p>
+                                        <p className="text-sm font-semibold text-slate-800 leading-tight">
+                                          {previewText}
+                                        </p>
+                                      </div>
+
+                                      {/* Στήλη 3: Score & Delete */}
+                                      <div className="flex flex-col items-end gap-2">
+                                        <div className="bg-white px-2 py-1 rounded-lg border border-slate-100 text-center min-w-[45px] shadow-sm">
+                                          <p className="text-[7px] font-bold text-slate-400 uppercase leading-none">Score</p>
+                                          <p className="text-[11px] font-black text-blue-600 leading-none mt-1">{confidenceScore}</p>
+                                        </div>
+                                        <button
+                                            onClick={() => handleDeleteCase(m.id)}
+                                            className="opacity-0 group-hover:opacity-100 text-[10px] font-bold text-red-500 hover:underline transition-opacity"
+                                        >
+                                          Διαγραφή
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </div>
+                              );
+                            })
+                        ) : (
+                            <div className="text-center py-12 bg-slate-50/50 rounded-3xl border-2 border-dashed border-slate-200">
+                              <p className="text-slate-400 text-sm font-medium">Δεν υπάρχει ιστορικό εγγραφών.</p>
                             </div>
-                        )) : <p className="text-slate-400">Δεν βρέθηκαν παλαιότερα περιστατικά.</p>}
+                        )}
                       </div>
                     </div>
 
-                    {/* Δεξιά Στήλη: AI Εργαλείο */}
-                    <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
-                      <h3 className="text-xl font-bold mb-6 text-slate-800">AI Medical Assistant</h3>
-                      <select
-                          className="w-full p-4 border border-slate-200 rounded-2xl mb-4 bg-white"
-                          value={aiQueryType}
-                          onChange={(e) => setAiQueryType(e.target.value)}
-                      >
-                        <option>Γενική Ερώτηση</option>
-                        <option>Ανάλυση Συμπτωμάτων</option>
-                        <option>Επεξήγηση Εξετάσεων</option>
-                        <option>Συμβουλές Πρόληψης</option>
-                      </select>
+                    {/* ΔΕΞΙΑ ΣΤΗΛΗ: AI ASSISTANT */}
+                    <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 flex flex-col h-fit">
+                      <h3 className="text-xl font-bold mb-6 text-slate-800 flex items-center gap-2">
+                        <span className="bg-blue-100 p-2 rounded-xl text-lg">🤖</span>
+                        AI Medical Assistant
+                      </h3>
 
-                      <textarea
-                          className="w-full p-4 border border-slate-200 rounded-2xl h-40 focus:ring-2 focus:ring-blue-100 outline-none transition"
-                          placeholder={`Πληκτρολογήστε εδώ για ${aiQueryType}...`}
-                          value={aiQuery}
-                          onChange={e => setAiQuery(e.target.value)}
-                      />
+                      <div className="space-y-4">
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold text-slate-400 uppercase ml-2">Τύπος Ανάλυσης</label>
+                          <select
+                              className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:ring-2 focus:ring-blue-100 outline-none transition"
+                              value={aiQueryType}
+                              onChange={(e) => setAiQueryType(e.target.value)}
+                          >
+                            <option>Γενική Εξέταση</option>
+                            <option>Ανάλυση Συμπτωμάτων</option>
+                            <option>Πρόγνωση Παθήσεων</option>
+                            <option>Προτάσεις Θεραπείας</option>
+                          </select>
+                        </div>
 
-                      <button onClick={handleAskAI} className="mt-4 w-full bg-blue-600 text-white py-4 rounded-2xl font-bold hover:bg-blue-700 transition shadow-lg">Ανάλυση</button>
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold text-slate-400 uppercase ml-2">Περιγραφή Συμπτωμάτων</label>
+                          <textarea
+                              className="w-full p-4 border border-slate-200 rounded-2xl h-40 focus:ring-2 focus:ring-blue-100 outline-none transition bg-slate-50"
+                              placeholder={`Περιγράψτε εδώ τα συμπτώματα για ${aiQueryType}...`}
+                              value={aiQuery}
+                              onChange={e => setAiQuery(e.target.value)}
+                          />
+                        </div>
 
+                        <button
+                            onClick={handleAskAI}
+                            className="w-full bg-blue-600 text-white py-4 rounded-2xl font-bold hover:bg-blue-700 transition shadow-lg shadow-blue-100"
+                        >
+                          Έναρξη Ανάλυσης
+                        </button>
+                      </div>
+
+                      {/* AI RESULT SECTION */}
                       {pendingDiagnosis && (
-                          <div className="mt-8 space-y-6">
+                          <div className="mt-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
                             {typeof pendingDiagnosis === 'object' ? (
                                 <div className="space-y-6">
-                                  {/* Κύρια Κάρτα Διάγνωσης */}
-                                  <div className="bg-white rounded-3xl p-8 shadow-sm border border-slate-100 relative overflow-hidden">
-                                    <div className="absolute top-0 left-0 w-2 h-full bg-blue-500"></div>
+                                  {/* Diagnosis Card */}
+                                  <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 relative overflow-hidden">
+                                    <div className="absolute top-0 left-0 w-1.5 h-full bg-blue-500"></div>
                                     <div className="flex justify-between items-start mb-4">
                                       <div>
-                                        <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest mb-1">Πιθανή Διάγνωση</p>
-                                        <h3 className="text-2xl font-bold text-slate-800">{pendingDiagnosis.diagnosis}</h3>
+                                        <p className="text-[9px] font-black text-blue-500 uppercase tracking-widest mb-1">Αποτέλεσμα AI</p>
+                                        <h3 className="text-xl font-bold text-slate-800">{pendingDiagnosis.diagnosis}</h3>
                                       </div>
                                       <div className="text-right">
-                                        <p className="text-[10px] font-bold text-slate-400 uppercase">Confidence</p>
+                                        <p className="text-[9px] font-bold text-slate-400 uppercase">Confidence</p>
                                         <span className="text-lg font-black text-blue-600">{pendingDiagnosis.confidence}</span>
                                       </div>
                                     </div>
-                                    <p className="text-slate-600 leading-relaxed italic border-t border-slate-50 pt-4 text-sm">
+                                    <p className="text-slate-600 text-xs leading-relaxed italic border-t border-slate-50 pt-4">
                                       {pendingDiagnosis.analysis}
                                     </p>
                                   </div>
 
-                                  {/* Grid για Προτάσεις και Red Flags */}
-                                  <div className="grid md:grid-cols-2 gap-6">
-                                    <div className="bg-emerald-50/50 rounded-3xl p-6 border border-emerald-100/50">
-                                      <h4 className="flex items-center gap-2 text-emerald-700 font-bold mb-4 text-sm">📋 Προτάσεις</h4>
+                                  <div className="grid grid-cols-2 gap-4">
+                                    <div className="bg-emerald-50 rounded-2xl p-4 border border-emerald-100">
+                                      <h4 className="text-[10px] font-bold text-emerald-700 mb-3 uppercase tracking-wider">📋 Προτάσεις</h4>
                                       <ul className="space-y-2">
                                         {pendingDiagnosis.recommendations?.map((rec: string, i: number) => (
-                                            <li key={i} className="flex items-start gap-2 text-xs text-emerald-900/80">
-                                              <span className="mt-1.5 w-1 h-1 rounded-full bg-emerald-400 shrink-0"></span>
+                                            <li key={i} className="flex items-start gap-2 text-[10px] text-emerald-900/80">
+                                              <span className="mt-1 w-1 h-1 rounded-full bg-emerald-400 shrink-0"></span>
                                               {rec}
                                             </li>
                                         ))}
                                       </ul>
                                     </div>
 
-                                    <div className="bg-rose-50/50 rounded-3xl p-6 border border-rose-100/50">
-                                      <h4 className="flex items-center gap-2 text-rose-700 font-bold mb-4 text-sm">⚠️ Red Flags</h4>
+                                    <div className="bg-rose-50 rounded-2xl p-4 border border-rose-100">
+                                      <h4 className="text-[10px] font-bold text-rose-700 mb-3 uppercase tracking-wider">⚠️ Red Flags</h4>
                                       <ul className="space-y-2">
                                         {pendingDiagnosis.red_flags?.map((flag: string, i: number) => (
-                                            <li key={i} className="flex items-start gap-2 text-xs text-rose-900/80">
-                                              <span className="mt-1.5 w-1 h-1 rounded-full bg-rose-400 shrink-0"></span>
+                                            <li key={i} className="flex items-start gap-2 text-[10px] text-rose-900/80">
+                                              <span className="mt-1 w-1 h-1 rounded-full bg-rose-400 shrink-0"></span>
                                               {flag}
                                             </li>
                                         ))}
                                       </ul>
                                     </div>
                                   </div>
+
+                                  <button
+                                      onClick={handleSaveCase}
+                                      className="w-full bg-slate-800 text-white py-4 rounded-2xl font-bold hover:bg-slate-900 transition shadow-xl flex items-center justify-center gap-2"
+                                  >
+                                    ✓ Επιβεβαίωση & Αποθήκευση
+                                  </button>
                                 </div>
                             ) : (
-                                /* Εμφάνιση απλού κειμένου όσο φορτώνει ή αν αποτύχει το JSON */
-                                <div className="p-12 bg-white rounded-3xl border-2 border-dashed border-slate-200 text-center">
-                                  <div className="animate-spin h-6 w-6 border-3 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
-                                  <p className="text-slate-500 font-medium">{pendingDiagnosis}</p>
+                                <div className="flex items-center justify-center p-12 bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200">
+                                  <div className="text-center">
+                                    <div className="animate-spin h-6 w-6 border-3 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+                                    <p className="text-slate-500 text-xs font-medium">{pendingDiagnosis}</p>
+                                  </div>
                                 </div>
                             )}
-
-                            {/* Κουμπί Αποθήκευσης */}
-                            <button
-                                onClick={handleSaveCase}
-                                className="w-full bg-slate-800 text-white py-4 rounded-2xl font-bold hover:bg-slate-900 transition shadow-lg flex items-center justify-center gap-2"
-                            >
-                              ✓ Αποθήκευση στο Ιστορικό
-                            </button>
                           </div>
                       )}
                     </div>
                   </>
               ) : (
-                  <div className="col-span-2 text-center p-20">
-                    <p className="text-lg font-bold text-slate-500">Φόρτωση δεδομένων...</p>
-                    <button onClick={() => setCurrentView('patients')} className="mt-4 text-blue-600 font-bold underline">Επιστροφή στη λίστα</button>
+                  <div className="col-span-2 text-center p-20 bg-white rounded-3xl border border-slate-100">
+                    <p className="text-lg font-bold text-slate-500 italic">Επιλέξτε έναν ασθενή για να δείτε το ιστορικό του...</p>
+                    <button onClick={() => setCurrentView('patients')} className="mt-4 text-blue-600 font-bold hover:underline">Επιστροφή στη λίστα</button>
                   </div>
               )}
             </div>
@@ -661,7 +757,54 @@ function App() {
 
             </div>
         )}
+        {/* MODAL ΓΙΑ ΠΡΟΒΟΛΗ ΠΛΗΡΟΥΣ ΠΕΡΙΣΤΑΤΙΚΟΥ */}
+        {selectedCase && (
+            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+              <div className="bg-white w-full max-w-2xl rounded-[32px] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
 
+                {/* Header */}
+                <div className="p-6 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
+                  <div>
+                    <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest">Λεπτομέρειες Περιστατικού</p>
+                    <h3 className="text-xl font-bold text-slate-800">{new Date(selectedCase.date).toLocaleString('el-GR')}</h3>
+                  </div>
+                  <button
+                      onClick={() => setSelectedCase(null)}
+                      className="w-10 h-10 flex items-center justify-center rounded-full bg-white shadow-sm border border-slate-100 text-slate-400 hover:text-slate-800 transition"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                {/* Content */}
+                <div className="p-8 max-h-[70vh] overflow-y-auto space-y-6">
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-400 uppercase mb-2">Συμπτώματα / Ερώτηση</h4>
+                    <p className="text-slate-700 bg-slate-50 p-4 rounded-2xl border border-slate-100 text-sm">
+                      {selectedCase.symptoms}
+                    </p>
+                  </div>
+
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-400 uppercase mb-2">Πλήρης Διάγνωση & Ανάλυση</h4>
+                    <div className="text-slate-700 whitespace-pre-wrap leading-relaxed text-sm bg-blue-50/30 p-6 rounded-2xl border border-blue-100/50">
+                      {selectedCase.diagnosis}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Footer */}
+                <div className="p-6 bg-slate-50/50 border-t border-slate-50 text-right">
+                  <button
+                      onClick={() => setSelectedCase(null)}
+                      className="px-8 py-3 bg-slate-800 text-white rounded-xl font-bold hover:bg-slate-900 transition"
+                  >
+                    Κλείσιμο
+                  </button>
+                </div>
+              </div>
+            </div>
+        )}
       </div>
   );
 }
