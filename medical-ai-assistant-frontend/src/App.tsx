@@ -265,13 +265,11 @@ function App() {
   const handleSaveCase = async () => {
     if (!selectedPatient || !aiQuery || !pendingDiagnosis) return;
 
-    // Μετατρέπουμε το αντικείμενο σε ένα όμορφο κείμενο για να αποθηκευτεί στη βάση
+    // Εδώ είναι η κρίσιμη αλλαγή:
+    // Αντί για κείμενο, μετατρέπουμε ΟΛΟ το αντικείμενο σε ένα JSON string.
+    // Έτσι η δομή (Arrays για προτάσεις κλπ) μένει άθικτη μέσα στη βάση.
     const diagnosisToSave = typeof pendingDiagnosis === 'object'
-        ? `ΔΙΑΓΝΩΣΗ: ${pendingDiagnosis.diagnosis}\n` +
-        `CONFIDENCE: ${pendingDiagnosis.confidence}\n` +
-        `ΑΝΑΛΥΣΗ: ${pendingDiagnosis.analysis}\n` +
-        `ΠΡΟΤΑΣΕΙΣ: ${pendingDiagnosis.recommendations?.join(", ")}\n` +
-        `RED FLAGS: ${pendingDiagnosis.red_flags?.join(", ")}`
+        ? JSON.stringify(pendingDiagnosis)
         : pendingDiagnosis;
 
     try {
@@ -281,7 +279,7 @@ function App() {
         body: JSON.stringify({
           patientId: selectedPatient.patientId,
           symptoms: aiQuery,
-          diagnosis: diagnosisToSave, // Στέλνουμε το κείμενο, όχι το object
+          diagnosis: diagnosisToSave,
           type: aiQueryType
         }),
       });
@@ -533,12 +531,22 @@ function App() {
                       <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
                         {medicalCases.length > 0 ? (
                             medicalCases.map((m: any) => {
-                              // Logic για την εξαγωγή του Preview και του Score από το κείμενο
-                              const diagMatch = m.diagnosis.match(/ΔΙΑΓΝΩΣΗ: (.*?)\n/);
-                              const scoreMatch = m.diagnosis.match(/CONFIDENCE: (.*?)\n/);
-
-                              const previewText = diagMatch ? diagMatch[1] : (m.diagnosis.length > 60 ? m.diagnosis.substring(0, 60) + "..." : m.diagnosis);
-                              const confidenceScore = scoreMatch ? scoreMatch[1] : "N/A";
+                              // --- ΑΥΤΟ ΕΙΝΑΙ ΤΟ LOGIC ΠΟΥ ΞΕΡΟΥΜΕ ΟΤΙ ΛΕΙΤΟΥΡΓΕΙ ---
+                              let data: any = { diagnosis: "Προβολή...", confidence: "N/A" };
+                              try {
+                                // Αν το νέο περιστατικό είναι JSON, το διαβάζουμε σωστά
+                                const parsed = JSON.parse(m.diagnosis);
+                                data = {
+                                  diagnosis: parsed.diagnosis,
+                                  confidence: parsed.confidence
+                                };
+                              } catch (e) {
+                                // Fallback για τα παλιά περιστατικά που ήταν απλό κείμενο
+                                data = {
+                                  diagnosis: m.diagnosis.split('\n')[0].replace("ΔΙΑΓΝΩΣΗ:", "").replace(/\*\*/g, '').trim(),
+                                  confidence: "N/A"
+                                };
+                              }
 
                               return (
                                   <div
@@ -547,37 +555,32 @@ function App() {
                                       className="group cursor-pointer bg-white border border-slate-100 rounded-2xl p-5 hover:shadow-md hover:border-blue-200 transition-all duration-200"
                                   >
                                     <div className="flex items-center gap-6 text-left">
-                                      {/* Στήλη 1: Ημερομηνία & Badge */}
-                                      <div className="w-28 flex-shrink-0">
+                                      {/* Στήλη 1: Ημερομηνία */}
+                                      <div className="w-28 flex-shrink-0 text-left">
                                         <p className="text-[11px] font-bold text-slate-400 mb-1">
                                           {new Date(m.date).toLocaleDateString('el-GR')}
                                         </p>
                                         <span className="inline-block px-2 py-1 bg-blue-50 text-[9px] font-bold text-blue-600 rounded-md uppercase border border-blue-100/50 leading-none">
-                    {m.type || "Γενική"}
-                </span>
+                        {m.type || "Γενική"}
+                    </span>
                                       </div>
 
-                                      {/* Στήλη 2: Περιεχόμενο (Symptoms & Preview) */}
+                                      {/* Στήλη 2: Διάγνωση (Προεπισκόπηση) */}
                                       <div className="flex-1 min-w-0 border-l border-slate-50 pl-6 text-left">
                                         <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tight mb-1 truncate">
-                                          {m.symptoms}
+                                          ΕΡΩΤΗΣΗ: {m.symptoms}
                                         </p>
                                         <p className="text-sm font-bold text-slate-800 leading-snug line-clamp-1">
-                                          {/* Βγάζει μόνο τον τίτλο της Διάγνωσης αν υπάρχει, αλλιώς τις πρώτες 60 λέξεις */}
-                                          {m.diagnosis.includes("ΔΙΑΓΝΩΣΗ:")
-                                              ? m.diagnosis.split("CONFIDENCE:")[0].replace("ΔΙΑΓΝΩΣΗ:", "").replace(/\*\*/g, '').trim()
-                                              : m.diagnosis.substring(0, 60).replace(/\*\*/g, '') + "..."}
+                                          {data.diagnosis}
                                         </p>
                                       </div>
 
-                                      {/* Στήλη 3: Score & Actions */}
-                                      <div className="w-24 flex-shrink-0 flex flex-col items-end gap-2 text-right">
+                                      {/* Στήλη 3: Confidence Score */}
+                                      <div className="w-24 flex-shrink-0 flex flex-col items-end gap-2">
                                         <div className="bg-slate-50/80 px-3 py-1.5 rounded-xl border border-slate-100 text-center w-full">
-                                          <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Score</p>
-                                          <p className="text-[11px] font-black text-blue-600 truncate">
-                                            {m.diagnosis.includes("CONFIDENCE:")
-                                                ? m.diagnosis.split("CONFIDENCE:")[1].split("\n")[0].replace(/\*\*/g, '').trim()
-                                                : "N/A"}
+                                          <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mb-0.5 text-center">Score</p>
+                                          <p className="text-[11px] font-black text-blue-600 truncate text-center">
+                                            {data.confidence}
                                           </p>
                                         </div>
                                         <button
@@ -585,7 +588,7 @@ function App() {
                                               e.stopPropagation();
                                               handleDeleteCase(m.id);
                                             }}
-                                            className="opacity-0 group-hover:opacity-100 text-[10px] font-bold text-rose-500 hover:text-rose-700 transition-all duration-200"
+                                            className="opacity-0 group-hover:opacity-100 text-[10px] font-bold text-rose-500 hover:text-rose-700 transition-all"
                                         >
                                           Διαγραφή
                                         </button>
@@ -617,7 +620,7 @@ function App() {
                               value={aiQueryType}
                               onChange={(e) => setAiQueryType(e.target.value)}
                           >
-                            <option>Γενική Εξέταση</option>
+                            <option>Γενική Ερώτηση</option>
                             <option>Ανάλυση Συμπτωμάτων</option>
                             <option>Πρόγνωση Παθήσεων</option>
                             <option>Προτάσεις Θεραπείας</option>
@@ -769,110 +772,101 @@ function App() {
         {/* MODAL ΓΙΑ ΠΡΟΒΟΛΗ ΠΛΗΡΟΥΣ ΠΕΡΙΣΤΑΤΙΚΟΥ */}
         {selectedCase && (
             <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-300">
-              <div className="bg-slate-50 w-full max-w-3xl rounded-[40px] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 border border-white">
+              <div className="bg-slate-50 w-full max-w-3xl rounded-[40px] shadow-2xl overflow-hidden border border-white animate-in zoom-in-95 duration-200">
 
                 {/* Header */}
-                <div className="p-8 bg-white border-b border-slate-100 flex justify-between items-center">
-                  <div>
+                <div className="p-8 bg-white border-b border-slate-100 flex justify-between items-center text-left">
+                  <div className="text-left">
                     <div className="flex items-center gap-2 mb-1">
-            <span className="px-2 py-0.5 bg-blue-50 text-[10px] font-bold text-blue-600 rounded-md uppercase tracking-wider border border-blue-100/50">
-              {selectedCase.type || "Περιστατικό"}
+            <span className="px-2 py-0.5 bg-blue-50 text-[10px] font-bold text-blue-600 rounded-md uppercase border border-blue-100/50">
+              {selectedCase.type}
             </span>
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                        • {new Date(selectedCase.date).toLocaleDateString('el-GR')} {new Date(selectedCase.date).toLocaleTimeString('el-GR', {hour: '2-digit', minute:'2-digit'})}
+                        • {new Date(selectedCase.date).toLocaleString('el-GR')}
                       </p>
                     </div>
-                    <h3 className="text-2xl font-bold text-slate-800 tracking-tight">Λεπτομέρειες Εγγραφής</h3>
+                    <h3 className="text-2xl font-bold text-slate-800 text-left">Λεπτομέρειες Εγγραφής</h3>
                   </div>
-                  <button
-                      onClick={() => setSelectedCase(null)}
-                      className="w-12 h-12 flex items-center justify-center rounded-full bg-slate-50 text-slate-400 hover:text-rose-500 hover:bg-rose-50 transition-all duration-200"
-                  >
-                    <span className="text-xl">✕</span>
-                  </button>
+                  <button onClick={() => setSelectedCase(null)} className="w-12 h-12 flex items-center justify-center rounded-full bg-slate-50 text-slate-400 hover:text-rose-500 transition-all">✕</button>
                 </div>
 
-                {/* Scrollable Content */}
-                <div className="p-8 max-h-[75vh] overflow-y-auto space-y-6 custom-scrollbar">
-
-                  {/* Ερώτηση / Συμπτώματα */}
+                <div className="p-8 max-h-[75vh] overflow-y-auto space-y-6 custom-scrollbar text-left">
+                  {/* Ενότητα Συμπτωμάτων */}
                   <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm text-left">
-                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                      <span className="w-1.5 h-1.5 rounded-full bg-slate-300"></span>
-                      Συμπτώματα που αναφέρθηκαν
-                    </h4>
-                    <p className="text-slate-700 font-medium leading-relaxed italic text-left">
-                      "{selectedCase.symptoms}"
-                    </p>
+                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 text-left">Συμπτώματα</h4>
+                    <p className="text-slate-700 italic text-left">"{selectedCase.symptoms}"</p>
                   </div>
 
-                  {/* ΕΔΩ ΓΙΝΕΤΑΙ Η ΜΑΓΕΙΑ ΤΟΥ FORMATTING */}
-                  <div className="space-y-6">
-                    {/* Ανάλυση Διάγνωσης (Κύρια Κάρτα) */}
-                    <div className="bg-white rounded-[32px] p-8 shadow-sm border border-slate-100 relative overflow-hidden text-left">
-                      <div className="absolute top-0 left-0 w-2 h-full bg-blue-500"></div>
-                      <div className="flex justify-between items-start mb-6 text-left">
-                        <div className="text-left">
-                          <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest mb-1 text-left">Αποτελέσματα AI</p>
-                          <h3 className="text-2xl font-bold text-slate-800 text-left leading-tight">
-                            {selectedCase.diagnosis.match(/ΔΙΑΓΝΩΣΗ: (.*?)\n/)?.[1] || "Πλήρης Ανάλυση"}
-                          </h3>
-                        </div>
-                        <div className="bg-blue-50 px-4 py-2 rounded-2xl border border-blue-100 text-right">
-                          <p className="text-[8px] font-bold text-blue-400 uppercase leading-none mb-1">Confidence</p>
-                          <span className="text-sm font-black text-blue-600 uppercase">
-                   {selectedCase.diagnosis.match(/CONFIDENCE: (.*?)\n/)?.[1] || "N/A"}
-                </span>
-                        </div>
-                      </div>
+                  {(() => {
+                    let data;
+                    try {
+                      // Μετατρέπουμε το αποθηκευμένο string πάλι σε αντικείμενο
+                      data = JSON.parse(selectedCase.diagnosis);
+                    } catch (e) {
+                      // Για παλιά δεδομένα που δεν ήταν JSON, τα δείχνουμε ως απλό κείμενο
+                      return <div className="p-6 bg-white rounded-3xl border whitespace-pre-wrap text-slate-600">{selectedCase.diagnosis}</div>;
+                    }
 
-                      <div className="text-slate-600 text-sm leading-relaxed border-t border-slate-50 pt-6 text-left">
-                        <h4 className="font-bold text-slate-800 mb-2 text-left">Κλινική Ανάλυση:</h4>
-                        <p className="text-left">
-                          {selectedCase.diagnosis.match(/ΑΝΑΛΥΣΗ: (.*?)\nΠΡΟΤΑΣΕΙΣ:/s)?.[1] ||
-                              selectedCase.diagnosis.split("ΑΝΑΛΥΣΗ:")[1]?.split("ΠΡΟΤΑΣΕΙΣ:")[0] ||
-                              selectedCase.diagnosis}
-                        </p>
-                      </div>
-                    </div>
+                    return (
+                        <div className="space-y-6 text-left">
+                          {/* Κύρια Κάρτα Διάγνωσης (Mirror του AI Result) */}
+                          <div className="bg-white rounded-3xl p-8 shadow-sm border border-slate-100 relative overflow-hidden text-left">
+                            <div className="absolute top-0 left-0 w-2 h-full bg-blue-500"></div>
+                            <div className="flex justify-between items-start mb-4 text-left">
+                              <div className="text-left">
+                                <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest mb-1 text-left">Αποτελέσματα AI</p>
+                                <h3 className="text-2xl font-bold text-slate-800 text-left">{data.diagnosis}</h3>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-[10px] font-bold text-slate-400 uppercase">Confidence</p>
+                                <span className="text-lg font-black text-blue-600">{data.confidence}</span>
+                              </div>
+                            </div>
+                            <p className="text-slate-600 text-sm leading-relaxed border-t border-slate-50 pt-4 text-left italic">
+                              {data.analysis}
+                            </p>
+                          </div>
 
-                    <div className="grid md:grid-cols-2 gap-6 text-left">
-                      {/* Κάρτα Προτάσεων */}
-                      <div className="bg-emerald-50/60 rounded-[32px] p-6 border border-emerald-100/50 text-left">
-                        <h4 className="flex items-center gap-2 text-emerald-700 font-bold mb-4 text-sm text-left uppercase tracking-tight">
-                          <span className="bg-white w-8 h-8 flex items-center justify-center rounded-xl shadow-sm text-sm">📋</span>
-                          Προτάσεις
-                        </h4>
-                        <div className="text-xs text-emerald-900/80 leading-relaxed space-y-2 text-left">
-                          {selectedCase.diagnosis.match(/ΠΡΟΤΑΣΕΙΣ: (.*?)\nRED FLAGS:/s)?.[1]?.split(',').map((item, i) => (
-                              <p key={i} className="flex gap-2 text-left"><span>•</span> {item.trim()}</p>
-                          )) || <p className="text-left">Δεν υπάρχουν καταγεγραμμένες προτάσεις.</p>}
-                        </div>
-                      </div>
+                          {/* Grid για Recommendations & Red Flags */}
+                          <div className="grid md:grid-cols-2 gap-6 text-left">
+                            {/* ΠΡΟΤΑΣΕΙΣ */}
+                            <div className="bg-emerald-50/60 rounded-[32px] p-6 border border-emerald-100/50 text-left">
+                              <h4 className="text-emerald-700 font-bold mb-4 text-sm uppercase text-left flex items-center gap-2">
+                                <span className="bg-white w-7 h-7 flex items-center justify-center rounded-lg shadow-sm text-sm">📋</span> Προτάσεις
+                              </h4>
+                              <ul className="space-y-2 text-left">
+                                {data.recommendations?.map((rec, i) => (
+                                    <li key={i} className="flex items-start gap-2 text-[11px] text-emerald-900/80 text-left">
+                                      <span className="mt-1 w-1 h-1 rounded-full bg-emerald-400 shrink-0"></span>
+                                      {rec}
+                                    </li>
+                                ))}
+                              </ul>
+                            </div>
 
-                      {/* Κάρτα Red Flags */}
-                      <div className="bg-rose-50/60 rounded-[32px] p-6 border border-rose-100/50 text-left">
-                        <h4 className="flex items-center gap-2 text-rose-700 font-bold mb-4 text-sm text-left uppercase tracking-tight">
-                          <span className="bg-white w-8 h-8 flex items-center justify-center rounded-xl shadow-sm text-sm">⚠️</span>
-                          Red Flags
-                        </h4>
-                        <div className="text-xs text-rose-900/80 leading-relaxed space-y-2 text-left">
-                          {selectedCase.diagnosis.split('RED FLAGS:')[1]?.split(',').map((item, i) => (
-                              <p key={i} className="flex gap-2 text-left"><span>•</span> {item.trim()}</p>
-                          )) || <p className="text-left">Δεν υπάρχουν καταγεγραμμένα σημεία προσοχής.</p>}
+                            {/* RED FLAGS */}
+                            <div className="bg-rose-50/60 rounded-[32px] p-6 border border-rose-100/50 text-left">
+                              <h4 className="text-rose-700 font-bold mb-4 text-sm uppercase text-left flex items-center gap-2">
+                                <span className="bg-white w-7 h-7 flex items-center justify-center rounded-lg shadow-sm text-sm">⚠️</span> Red Flags
+                              </h4>
+                              <ul className="space-y-2 text-left">
+                                {data.red_flags?.map((flag, i) => (
+                                    <li key={i} className="flex items-start gap-2 text-[11px] text-rose-900/80 text-left">
+                                      <span className="mt-1 w-1 h-1 rounded-full bg-rose-400 shrink-0"></span>
+                                      {flag}
+                                    </li>
+                                ))}
+                              </ul>
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    </div>
-                  </div>
+                    );
+                  })()}
                 </div>
 
-                {/* Footer */}
-                <div className="p-8 bg-white border-t border-slate-100 text-right">
-                  <button
-                      onClick={() => setSelectedCase(null)}
-                      className="px-10 py-4 bg-slate-900 text-white rounded-2xl font-bold hover:bg-slate-800 transition-all shadow-lg active:scale-95"
-                  >
-                    Κλείσιμο Παραθύρου
+                <div className="p-8 bg-white border-t text-right">
+                  <button onClick={() => setSelectedCase(null)} className="px-10 py-4 bg-slate-900 text-white rounded-2xl font-bold hover:bg-slate-800 transition-all shadow-lg active:scale-95">
+                    Κλείσιμο
                   </button>
                 </div>
               </div>
