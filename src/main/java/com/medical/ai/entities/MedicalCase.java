@@ -19,6 +19,8 @@ public class MedicalCase {
     @Column(columnDefinition = "TEXT")
     private String symptoms;
 
+    private String type;
+
     private String diagnosis;
 
     @Column(columnDefinition = "TEXT")
@@ -61,4 +63,7 @@ public class MedicalCase {
 
     public User getDoctor() { return doctor; }
     public void setDoctor(User doctor) { this.doctor = doctor; }
+
+    public String getType() { return type; }
+    public void setType(String type) { this.type = type; }
 }

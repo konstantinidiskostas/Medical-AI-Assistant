@@ -240,7 +240,7 @@ function App() {
     try {
       const response = await fetch('http://localhost:8080/api/medical-cases/save', {
         method: 'POST', headers: getAuthHeaders(),
-        body: JSON.stringify({ patientId: selectedPatient.patientId, symptoms: aiQuery, diagnosis: pendingDiagnosis }),
+        body: JSON.stringify({ patientId: selectedPatient.patientId, symptoms: aiQuery, diagnosis: pendingDiagnosis, type: aiQueryType }),
       });
       if (response.ok) {
         alert('Το περιστατικό αποθηκεύτηκε!');

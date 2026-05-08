@@ -59,6 +59,7 @@ public class MedicalCaseController {
         newCase.setPatient(patient);
         newCase.setSymptoms(request.getSymptoms());
         newCase.setDiagnosis(request.getDiagnosis());
+        newCase.setType(request.getType());
         newCase.setDate(LocalDateTime.now()); // Record the exact time of approval
 
         // 3. Persist the record to the database via the Service layer
@@ -109,6 +110,7 @@ class CaseRequest {
     private Long patientId;
     private String symptoms;
     private String diagnosis;
+    private String type;
 
     // Getters and Setters required by Jackson for JSON deserialization
     public Long getPatientId() { return patientId; }
@@ -119,4 +121,7 @@ class CaseRequest {
 
     public String getDiagnosis() { return diagnosis; }
     public void setDiagnosis(String diagnosis) { this.diagnosis = diagnosis; }
+
+    public String getType() { return type; }
+    public void setType(String type) { this.type = type; }
 }
