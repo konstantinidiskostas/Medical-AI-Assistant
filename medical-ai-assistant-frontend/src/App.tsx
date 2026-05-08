@@ -223,16 +223,42 @@ function App() {
   const handleAskAI = async () => {
     if (!aiQuery) return;
     setPendingDiagnosis("Ανάλυση σε εξέλιξη...");
+
     try {
       const response = await fetch('http://localhost:8080/api/ai/query', {
-        method: 'POST', headers: getAuthHeaders(),
+        method: 'POST',
+        headers: getAuthHeaders(),
         body: JSON.stringify({ query: `${aiQueryType}: ${aiQuery}` }),
       });
+
       if (response.ok) {
         const data = await response.json();
-        setPendingDiagnosis(data.diagnosis || data.response || data.answer);
+        // Το Gemini μερικές φορές βάζει το JSON μέσα σε markdown blocks (```json ... ```)
+        // Πρέπει να καθαρίσουμε το κείμενο πριν το κάνουμε parse
+        let rawText = data.diagnosis || data.response || data.answer || data;
+
+        console.log("Raw AI Response:", rawText); // Δες το στο F12 console
+
+        if (typeof rawText === 'string') {
+          // Καθαρισμός από τυχόν ```json ή ``` tags που βάζει το AI
+          const cleanedText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+
+          try {
+            const parsed = JSON.parse(cleanedText);
+            console.log("Parsed Object:", parsed);
+            setPendingDiagnosis(parsed); // Εδώ μπαίνει το αντικείμενο
+          } catch (e) {
+            console.error("JSON Parse Error:", e);
+            setPendingDiagnosis(rawText); // Fallback στο κείμενο αν αποτύχει
+          }
+        } else {
+          setPendingDiagnosis(rawText);
+        }
       }
-    } catch (error) { setPendingDiagnosis("Προέκυψε σφάλμα με το AI."); }
+    } catch (error) {
+      console.error("Fetch Error:", error);
+      setPendingDiagnosis("Σφάλμα σύνδεσης με το AI.");
+    }
   };
 
   const handleSaveCase = async () => {
@@ -512,9 +538,69 @@ function App() {
                       <button onClick={handleAskAI} className="mt-4 w-full bg-blue-600 text-white py-4 rounded-2xl font-bold hover:bg-blue-700 transition shadow-lg">Ανάλυση</button>
 
                       {pendingDiagnosis && (
-                          <div className="mt-6 p-6 bg-blue-50 rounded-2xl border border-blue-100">
-                            <p className="text-blue-900 leading-relaxed">{pendingDiagnosis}</p>
-                            <button onClick={handleSaveCase} className="block mt-4 font-bold text-green-700 hover:text-green-800 transition">+ Αποθήκευση στο ιστορικό</button>
+                          <div className="mt-8 space-y-6">
+                            {typeof pendingDiagnosis === 'object' ? (
+                                <div className="space-y-6">
+                                  {/* Κύρια Κάρτα Διάγνωσης */}
+                                  <div className="bg-white rounded-3xl p-8 shadow-sm border border-slate-100 relative overflow-hidden">
+                                    <div className="absolute top-0 left-0 w-2 h-full bg-blue-500"></div>
+                                    <div className="flex justify-between items-start mb-4">
+                                      <div>
+                                        <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest mb-1">Πιθανή Διάγνωση</p>
+                                        <h3 className="text-2xl font-bold text-slate-800">{pendingDiagnosis.diagnosis}</h3>
+                                      </div>
+                                      <div className="text-right">
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase">Confidence</p>
+                                        <span className="text-lg font-black text-blue-600">{pendingDiagnosis.confidence}</span>
+                                      </div>
+                                    </div>
+                                    <p className="text-slate-600 leading-relaxed italic border-t border-slate-50 pt-4 text-sm">
+                                      {pendingDiagnosis.analysis}
+                                    </p>
+                                  </div>
+
+                                  {/* Grid για Προτάσεις και Red Flags */}
+                                  <div className="grid md:grid-cols-2 gap-6">
+                                    <div className="bg-emerald-50/50 rounded-3xl p-6 border border-emerald-100/50">
+                                      <h4 className="flex items-center gap-2 text-emerald-700 font-bold mb-4 text-sm">📋 Προτάσεις</h4>
+                                      <ul className="space-y-2">
+                                        {pendingDiagnosis.recommendations?.map((rec: string, i: number) => (
+                                            <li key={i} className="flex items-start gap-2 text-xs text-emerald-900/80">
+                                              <span className="mt-1.5 w-1 h-1 rounded-full bg-emerald-400 shrink-0"></span>
+                                              {rec}
+                                            </li>
+                                        ))}
+                                      </ul>
+                                    </div>
+
+                                    <div className="bg-rose-50/50 rounded-3xl p-6 border border-rose-100/50">
+                                      <h4 className="flex items-center gap-2 text-rose-700 font-bold mb-4 text-sm">⚠️ Red Flags</h4>
+                                      <ul className="space-y-2">
+                                        {pendingDiagnosis.red_flags?.map((flag: string, i: number) => (
+                                            <li key={i} className="flex items-start gap-2 text-xs text-rose-900/80">
+                                              <span className="mt-1.5 w-1 h-1 rounded-full bg-rose-400 shrink-0"></span>
+                                              {flag}
+                                            </li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                  </div>
+                                </div>
+                            ) : (
+                                /* Εμφάνιση απλού κειμένου όσο φορτώνει ή αν αποτύχει το JSON */
+                                <div className="p-12 bg-white rounded-3xl border-2 border-dashed border-slate-200 text-center">
+                                  <div className="animate-spin h-6 w-6 border-3 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+                                  <p className="text-slate-500 font-medium">{pendingDiagnosis}</p>
+                                </div>
+                            )}
+
+                            {/* Κουμπί Αποθήκευσης */}
+                            <button
+                                onClick={handleSaveCase}
+                                className="w-full bg-slate-800 text-white py-4 rounded-2xl font-bold hover:bg-slate-900 transition shadow-lg flex items-center justify-center gap-2"
+                            >
+                              ✓ Αποθήκευση στο Ιστορικό
+                            </button>
                           </div>
                       )}
                     </div>
