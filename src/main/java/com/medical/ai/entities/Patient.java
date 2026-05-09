@@ -5,24 +5,25 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Entity class representing a Patient in the system.
- * This class maps to the 'patients' table in the MySQL database
- * and maintains a Many-to-One relationship with the User (Doctor).
+ * Η κλάση (Entity) που αντιπροσωπεύει τον Ασθενή στο σύστημά μας.
+ * Με τη βοήθεια του JPA, αυτή η κλάση μεταφράζεται αυτόματα σε έναν πίνακα με όνομα 'patients'
+ * μέσα στη βάση δεδομένων MySQL. Επίσης, διαχειρίζεται το ποιος γιατρός παρακολουθεί τον ασθενή
+ * και ποιο είναι το ιατρικό του ιστορικό.
  */
 @Entity
 @Table(name = "patients")
 public class Patient {
 
     /**
-     * Unique identifier for each patient.
-     * Generated automatically by the database (Auto-increment).
+     * @Id: Δηλώνει ότι αυτό είναι το Πρωτεύον Κλειδί (Primary Key) του πίνακα.
+     * @GeneratedValue: Λέει στη βάση (MySQL) να βάζει το ID αυτόματα, ξεκινώντας από το 1 και πηγαίνοντας 2, 3, κ.ο.κ. (Auto-Increment).
      */
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long patientId;
 
     /**
-     * Patient's first and full name. Mandatory field.
+     * @Column(nullable = false): Δηλώνει ότι αυτή η στήλη (όνομα) ΔΕΝ μπορεί να μείνει κενή (Not Null).
      */
     @Column(nullable = false)
     private String firstName;
@@ -31,48 +32,53 @@ public class Patient {
     private String lastName;
 
     /**
-     * Social Security Number (AMKA). Unique identifier for identification.
+     * unique = true: Σημαίνει ότι δεν μπορούν να υπάρξουν 2 ασθενείς με το ίδιο ΑΜΚΑ.
+     * nullable = false: Το ΑΜΚΑ είναι υποχρεωτικό.
      */
     @Column(unique = true, nullable = false)
     private String amka;
 
     /**
-     * Patient's age in years.
+     * Η ηλικία του ασθενή
      */
     private int age;
 
     /**
-     * Patient's gender.
+     * Το φύλο του ασθενή
      */
     private String gender;
 
     /**
-     * Patient's contact telephone number.
+     * Το τηλέφωνο του ασθενή
      */
     private String telephone;
 
     /**
-     * Relationship mapping: Each patient belongs to one specific Doctor (User).
-     * This ensures data privacy and organization per doctor.
+     * ΣΧΕΣΗ ΠΟΛΛΑ-ΠΡΟΣ-ΕΝΑ (Many-To-One):
+     * Πολλοί ασθενείς μπορούν να ανήκουν σε Έναν γιατρό.
+     * Το @JoinColumn φτιάχνει μια στήλη 'doctor_id' (Ξένο Κλειδί / Foreign Key) στη βάση,
+     * ώστε να ξέρουμε ποιος User (Γιατρός) είναι υπεύθυνος.
      */
     @ManyToOne
     @JoinColumn(name = "doctor_id", nullable = false)
     private User doctor;
 
     /**
-     * Relationship mapping: One patient can have multiple medical cases.
-     * CascadeType.ALL ensures that deleting a patient deletes their cases.
+     * ΣΧΕΣΗ ΕΝΑ-ΠΡΟΣ-ΠΟΛΛΑ (One-To-Many):
+     * Ένας ασθενής μπορεί να έχει Πολλά ιατρικά περιστατικά.
+     * Το 'mappedBy = "patient"' λέει: "Τη σχέση αυτή την ελέγχει η μεταβλητή 'patient' που υπάρχει στην κλάση MedicalCase".
+     * Το 'cascade = CascadeType.ALL' σημαίνει: Αν διαγράψω αυτόν τον ασθενή, διέγραψε αυτόματα και όλο του το ιστορικό.
      */
     @OneToMany(mappedBy = "patient", cascade = CascadeType.ALL)
     private List<MedicalCase> medicalCases = new ArrayList<>();
 
     /**
-     * Default constructor required by JPA/Hibernate.
+     * Default constructor απαραίτητος για το JPA/Hibernate.
      */
     public Patient() {}
 
     /**
-     * Constructor to initialize a patient with all necessary information.
+     * Constructor με παραμέτρους.
      */
     public Patient(String firstName,String lastName, String amka, int age, String gender, String telephone, User doctor) {
         this.firstName = firstName;
@@ -114,7 +120,9 @@ public class Patient {
     public void setMedicalCases(List<MedicalCase> medicalCases) { this.medicalCases = medicalCases; }
 
     /**
-     * Helper method to maintain the bidirectional relationship for medical cases.
+     * Βοηθητική Μέθοδος:
+     * Όταν προσθέτουμε ένα νέο περιστατικό στον Ασθενή, φροντίζει να πει και στο περιστατικό
+     * "Εσύ ανήκεις σε αυτόν τον Ασθενή", "δένοντας" τη σχέση και από τις δύο πλευρές!
      */
     public void addMedicalCase(MedicalCase medicalCase) {
         this.medicalCases.add(medicalCase);
