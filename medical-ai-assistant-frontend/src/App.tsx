@@ -608,7 +608,7 @@ function App() {
                     {/* ΔΕΞΙΑ ΣΤΗΛΗ: AI ASSISTANT */}
                     <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 flex flex-col h-fit">
                       <h3 className="text-xl font-bold mb-6 text-slate-800 flex items-center gap-2">
-                        <span className="bg-blue-100 p-2 rounded-xl text-lg">🤖</span>
+
                         AI Medical Assistant
                       </h3>
 
