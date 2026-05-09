@@ -5,41 +5,59 @@ import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
 /**
- * Entity representing a Medical Case.
- * Maps strictly to the provided class diagram.
+ * Η κλάση (Entity) που αντιπροσωπεύει ένα Ιατρικό Περιστατικό (Medical Case).
+ * Μεταφράζεται αυτόματα στον πίνακα 'medical_cases' στη βάση δεδομένων MySQL.
+ * Εδώ αποθηκεύονται τα συμπτώματα, η διάγνωση του AI και το πότε έγινε η εξέταση.
  */
 @Entity
 @Table(name = "medical_cases")
 public class MedicalCase {
-
+    /**
+     * Το Πρωτεύον Κλειδί (Primary Key) του περιστατικού.
+     * Το Auto-Increment αναλαμβάνει να δίνει αύξοντα αριθμό (1, 2, 3...) αυτόματα.
+     */
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id; // Corresponds to caseId
-
+    /**
+     * Η περιγραφή των συμπτωμάτων ή της ερώτησης που έκανε ο γιατρός.
+     * Χρησιμοποιούμε columnDefinition = "TEXT" γιατί το προεπιλεγμένο VARCHAR
+     * χωράει μόνο 255 χαρακτήρες, ενώ μια περιγραφή μπορεί να είναι μεγαλύτερη.
+     */
     @Column(columnDefinition = "TEXT")
     private String symptoms;
-
+    // Ο τύπος της ερώτησης (π.χ. "Ανάλυση Συμπτωμάτων", "Γενική Ερώτηση")
     private String type;
-
+    // Η απάντηση/διάγνωση που έδωσε το AI.
     private String diagnosis;
-
+    // Πιθανή θεραπεία (μελλοντική υλοποίηση).
     @Column(columnDefinition = "TEXT")
     private String treatment;
-
+    // Η ακριβής ημερομηνία και ώρα που αποθηκεύτηκε το περιστατικό.
     private LocalDateTime date;
 
-    // Many-to-One relationship with Patient
+    /**
+     * ΣΧΕΣΗ ΠΟΛΛΑ-ΠΡΟΣ-ΕΝΑ: Πολλά περιστατικά ανήκουν σε Έναν Ασθενή.
+     * Το @JoinColumn φτιάχνει τη στήλη 'patient_id' (Ξένο Κλειδί) στη MySQL.
+     * Το @JsonIgnore λέει στο Spring Boot "Όταν στέλνεις αυτό το
+     * περιστατικό στο React, ΜΗΝ συμπεριλάβεις τα στοιχεία του ασθενή, για να μην κολλήσουμε σε άπειρη λούπα!"
+     */
     @ManyToOne
     @JoinColumn(name = "patient_id")
     @JsonIgnore // Prevents infinite JSON recursion
     private Patient patient;
 
-    // Many-to-One relationship with User (Doctor)
+    /**
+     * ΣΧΕΣΗ ΠΟΛΛΑ-ΠΡΟΣ-ΕΝΑ: Πολλά περιστατικά δημιουργούνται από Έναν Γιατρό.
+     * Ομοίως με παραπάνω, φτιάχνει στήλη 'doctor_id' και αγνοείται στο JSON output.
+     */
     @ManyToOne
     @JoinColumn(name = "doctor_id")
     @JsonIgnore // Prevents infinite JSON recursion
     private User doctor;
-
+    /**
+     * Υποχρεωτικός κενός κατασκευαστής για το JPA/Hibernate.
+     */
     public MedicalCase() {}
 
     // Getters and Setters
