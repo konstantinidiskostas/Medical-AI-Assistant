@@ -1,43 +1,37 @@
 package com.medical.ai.entities;
 
-import com.medical.ai.repositories.UserRepository;
+
 import jakarta.persistence.*;
 
-import java.util.List;
-
 /**
- * Entity class representing a User in the system.
- * Mapped to the 'users' table in the database with the required fields:
- * userId, username, password, fullName, and role.
+ * @Entity: Δηλώνει ότι αυτή η κλάση είναι ένα μοντέλο δεδομένων
+ * που θα αντιστοιχιστεί σε έναν πίνακα της βάσης δεδομένων.
+ * @Table: Ορίζει το όνομα του πίνακα στη βάση (εδώ 'users').
  */
 @Entity
 @Table(name = "users")
 public class User {
 
     /**
-     * Unique identifier for each user.
-     * Generated automatically by the database.
+     * @Id: Δηλώνει ότι αυτό το πεδίο είναι το Πρωτεύον Κλειδί (Primary Key).
+     * @GeneratedValue: Λέει στη βάση να δίνει αυτόματα νούμερο (1, 2, 3...)
+     * σε κάθε νέο χρήστη (Auto-increment).
      */
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     /**
-     * Username used for system authentication.
-     * Must be unique.
+     * @Column: Ορίζει ιδιότητες για τη στήλη.
+     * nullable = false: Δεν επιτρέπεται να είναι κενό.
+     * unique = true: Δεν επιτρέπεται δεύτερος χρήστης με το ίδιο username.
      */
     @Column(nullable = false, unique = true)
     private String username;
 
-    /**
-     * User's password (should be stored encrypted in a real-world scenario).
-     */
     @Column(nullable = false)
     private String password;
 
-    /**
-     * The full name of the user.
-     */
     @Column(nullable = false)
     private String firstName;
 
@@ -46,19 +40,17 @@ public class User {
 
     @Column(nullable = false)
     private String email;
-    /**
-     * The role of the user in the system (e.g., 'doctor', 'admin', 'researcher').
-     */
+
     @Column(nullable = false)
     private String role;
 
     /**
-     * Default constructor required by JPA.
+     * Default constructor χρειάζεται από το JPA.
      */
     public User() {}
 
     /**
-     * Parameterized constructor for easy object creation.
+     * Constructor με παραμέτρους
      */
     public User(String username, String password, String firstName, String lastName, String email, String role) {
         this.username = username;
@@ -80,7 +72,7 @@ public class User {
     public String getPassword() { return password; }
     public void setPassword(String password) { this.password = password; }
 
-    // Νέα Getters/Setters
+
     public String getFirstName() { return firstName; }
     public void setFirstName(String firstName) { this.firstName = firstName; }
 
