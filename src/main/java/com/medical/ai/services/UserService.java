@@ -10,32 +10,34 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * The UserService handles all operations related to the System Users (Doctors).
- * It manages user registration and authentication checks.
+ * Το UserService χειρίζεται όλες τις λειτουργίες που σχετίζονται με τους Χρήστες του Συστήματος (Γιατρούς).
+ * Διαχειρίζεται την εγγραφή των χρηστών και τους ελέγχους σύνδεσης (authentication).
  */
 @Service
 public class UserService {
 
-    // Dependency: We need the UserRepository to access user data in the database.
+    // Εξάρτηση: Χρειαζόμαστε το UserRepository για να έχουμε πρόσβαση στα δεδομένα των χρηστών στη βάση.
     private final UserRepository userRepository;
 
     /**
-     * Dependency Injection: Spring injects the UserRepository into this service.
+     * Dependency Injection
+     * Το Spring Boot βρίσκει αυτόματα το UserRepository και το
+     * δίνει έτοιμο προς χρήση μέσα από αυτόν τον κατασκευαστή.
      */
     @Autowired
     public UserService(UserRepository userRepository) {
         this.userRepository = userRepository;
     }
 
-    /**
-     * Registers a new user (doctor) in the system.
-     * In a real-world scenario, we would hash the password before saving here.
-     * @param user The user object with username and password.
-     * @return The saved user.
-     */
-    @Autowired
-    private PasswordEncoder passwordEncoder; // Inject the encoder
 
+    @Autowired
+    private PasswordEncoder passwordEncoder; // Εισαγωγή του εργαλείου κρυπτογράφησης
+    /**
+     * Εγγράφει έναν νέο χρήστη στο σύστημα.
+     * Εδώ κρυπτογραφούμε (hash) τον κωδικό πρόσβασης πριν την αποθήκευση για λόγους ασφαλείας.
+     * @param user Το αντικείμενο του χρήστη με το username και τον κωδικό του.
+     * @return Τον αποθηκευμένο χρήστη.
+     */
     public User registerUser(User user) {
         // Encode the password before saving to database
         user.setPassword(passwordEncoder.encode(user.getPassword()));
@@ -43,10 +45,10 @@ public class UserService {
     }
 
     /**
-     * Searches for a user by their username.
-     * This is essential for the Login process.
-     * @param username The username entered during login.
-     * @return An Optional containing the user if they exist.
+     * Ψάχνει για έναν χρήστη με βάση το username του.
+     * Αυτό είναι απολύτως απαραίτητο για τη διαδικασία Σύνδεσης (Login).
+     * @param username Το username που πληκτρολογήθηκε κατά το login.
+     * @return Ένα Optional που περιέχει τον χρήστη, αν αυτός υπάρχει στη βάση.
      */
     public Optional<User> findByUsername(String username) {
         return userRepository.findByUsername(username);
@@ -54,5 +56,5 @@ public class UserService {
 
 
     public List<User> getAllUsers() {
-        return userRepository.findAll(); // Προσοχή: με μικρό 'u' το userRepository!
+        return userRepository.findAll(); // Επιστρέφει όλους τους χρήστες καλώντας την έτοιμη μέθοδο του Repository
     }}
