@@ -9,18 +9,22 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 
 /**
- * The MedicalCaseService acts as the manager for all clinical visits.
- * It handles saving, retrieving, and (soon) processing medical cases via AI.
+ * Η κλάση MedicalCaseService λειτουργεί ως το Service Layer
+ * για τη διαχείριση των ιατρικών περιστατικών. Αναλαμβάνει την αποθήκευση,
+ * ανάκτηση και μελλοντική επεξεργασία των περιστατικών μέσω Τεχνητής Νοημοσύνης.
  */
 @Service
 public class MedicalCaseService {
 
-    // Dependency: We need the repository to communicate with the database table 'medical_cases'.
+    /**
+     * Το repository που είναι υπεύθυνο για την επικοινωνία
+     * με τον πίνακα 'medical_cases' της βάσης δεδομένων.
+     */
     private final MedicalCaseRepository medicalCaseRepository;
 
     /**
-     * Dependency Injection: Spring automatically provides the instance of
-     * MedicalCaseRepository when the application starts.
+     * Dependency Injection: Το Spring παρέχει
+     * αυτόματα το στιγμιότυπο του MedicalCaseRepository κατά την αρχικοποίηση της κλάσης.
      */
     @Autowired
     public MedicalCaseService(MedicalCaseRepository medicalCaseRepository) {
@@ -28,41 +32,36 @@ public class MedicalCaseService {
     }
 
     /**
-     * Creates a new medical case (visit) and saves it to the database.
-     * @param medicalCase The case object containing symptoms and patient data.
-     * @return The saved MedicalCase entity with its generated ID.
+     * Δημιουργεί ένα νέο ιατρικό περιστατικό και το αποθηκεύει στη βάση δεδομένων.
+     * @param medicalCase Το αντικείμενο του περιστατικού.
+     * @return Το αποθηκευμένο περιστατικό με το παραγόμενο αναγνωριστικό (ID) του.
      */
     public MedicalCase createMedicalCase(MedicalCase medicalCase) {
-        // Here we could add logic like: "Validate that symptoms are not empty"
         return medicalCaseRepository.save(medicalCase);
     }
+    /**
+     * Διαγράφει ένα ιατρικό περιστατικό από τη βάση δεδομένων βάσει του αναγνωριστικού του.
+     * @param id Το αναγνωριστικό (ID) του περιστατικού προς διαγραφή.
+     */
     public void deleteCase(Long id) {
         medicalCaseRepository.deleteById(id);
     }
 
     /**
-     * Retrieves the full medical history for a specific patient.
-     * Useful for the doctor to see previous visits.
-     * @param patient The patient whose history we want to load.
-     * @return A list of all medical cases for that patient, sorted by date (newest first).
+     * Ανακτά το πλήρες ιατρικό ιστορικό ενός συγκεκριμένου ασθενούς.
+     * @param patient Το αντικείμενο του ασθενούς του οποίου το ιστορικό αναζητείται.
+     * @return Μία λίστα με όλα τα ιατρικά περιστατικά του ασθενούς, ταξινομημένα κατά φθίνουσα ημερομηνία.
      */
     public List<MedicalCase> getMedicalHistory(Patient patient) {
         return medicalCaseRepository.findByPatientOrderByDateDesc(patient);
     }
+    /**
+     * Επιστρέφει το σύνολο των ιατρικών περιστατικών που υπάρχουν στο σύστημα.
+     * @return Λίστα με όλα τα καταχωρημένα αντικείμενα MedicalCase.
+     */
     public List<MedicalCase> getAllCases() {
         return medicalCaseRepository.findAll();
     }
 
-    /**
-     * TODO: This will be the "bridge" to the AI.
-     * In the future, this method will take the medicalCase, call an external
-     * AI API (like Gemini), and then update the MedicalCase with the
-     * generated Diagnosis and Confidence Score.
-     */
-    public void processCaseWithAi(MedicalCase medicalCase) {
-        // 1. Prepare the prompt for the AI using the medicalCase.getSymptoms()
-        // 2. Call the AI API (Gemini/OpenAI)
-        // 3. Update the medicalCase object with the result (aiResponseContent, aiConfidenceScore)
-        // 4. Save the updated object: medicalCaseRepository.save(medicalCase)
-    }
+
 }
