@@ -39,7 +39,7 @@ public class UserService {
      * @return Τον αποθηκευμένο χρήστη.
      */
     public User registerUser(User user) {
-        // Encode the password before saving to database
+        // Κρυπτογράφηση του κωδικού πριν την αποθήκευση στη βάση δεδομένων
         user.setPassword(passwordEncoder.encode(user.getPassword()));
         return userRepository.save(user);
     }
