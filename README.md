@@ -6,6 +6,11 @@ A modern medical history management system and diagnosis support tool powered by
 ## 📋 Description
 The application allows healthcare professionals to manage patient profiles, record medical cases, and receive AI-generated diagnostic support based on clinical data.
 
+## 🎥 Video Demo / Presentation
+Click the image below to watch a demonstration of the Medical AI Assistant:
+
+[![Medical AI Assistant Demo](https://img.youtube.com/vi/Cr8n2IaL3mk/maxresdefault.jpg)](https://www.youtube.com/watch?v=Cr8n2IaL3mk)
+
 ## 🏗️ Architecture (Backend)
 The project follows the standard **3-Tier Architecture** of Spring Boot:
 * **Entities:** Database schema definitions (User, Patient, MedicalCase).
