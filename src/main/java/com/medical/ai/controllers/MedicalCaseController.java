@@ -60,10 +60,35 @@ public class MedicalCaseController {
         newCase.setSymptoms(request.getSymptoms());
         newCase.setDiagnosis(request.getDiagnosis());
         newCase.setType(request.getType());
+        newCase.setConversation(request.getConversation());
+        newCase.setTags(request.getTags());
         newCase.setDate(LocalDateTime.now()); // Record the exact time of approval
+
+        // If conversation is provided, create a JSON array from it (or store as-is)
+        if (request.getConversation() != null && !request.getConversation().isEmpty()) {
+            newCase.setConversation(request.getConversation());
+        }
 
         // 3. Persist the record to the database via the Service layer
         return medicalCaseService.createMedicalCase(newCase);
+    }
+
+    /**
+     * Προσθέτει ένα νέο Q&A σε υπάρχον περιστατικό (συνέχεια συνομιλίας).
+     * POST /api/medical-cases/{id}/conversation
+     */
+    @PostMapping("/{id}/conversation")
+    public MedicalCase appendConversation(@PathVariable Long id, @RequestBody ConversationEntry entry) {
+        return medicalCaseService.appendConversation(id, entry.getSymptoms(), entry.getDiagnosis(), entry.getType(), entry.getTags());
+    }
+
+    /**
+     * Ενημερώνει μόνο τις ετικέτες (tags) ενός περιστατικού.
+     * PUT /api/medical-cases/{id}/tags
+     */
+    @PutMapping("/{id}/tags")
+    public MedicalCase updateTags(@PathVariable Long id, @RequestBody TagsRequest request) {
+        return medicalCaseService.updateTags(id, request.getTags());
     }
 
     /**
@@ -111,8 +136,9 @@ class CaseRequest {
     private String symptoms;
     private String diagnosis;
     private String type;
+    private String conversation; // JSON array of all Q&A pairs
+    private String tags; // Comma-separated tags
 
-    // Getters and Setters required by Jackson for JSON deserialization
     public Long getPatientId() { return patientId; }
     public void setPatientId(Long patientId) { this.patientId = patientId; }
 
@@ -124,4 +150,36 @@ class CaseRequest {
 
     public String getType() { return type; }
     public void setType(String type) { this.type = type; }
+
+    public String getConversation() { return conversation; }
+    public void setConversation(String conversation) { this.conversation = conversation; }
+
+    public String getTags() { return tags; }
+    public void setTags(String tags) { this.tags = tags; }
+}
+
+class ConversationEntry {
+    private String symptoms;
+    private String diagnosis;
+    private String type;
+    private String tags; // Comma-separated tags (optional)
+
+    public String getSymptoms() { return symptoms; }
+    public void setSymptoms(String symptoms) { this.symptoms = symptoms; }
+
+    public String getDiagnosis() { return diagnosis; }
+    public void setDiagnosis(String diagnosis) { this.diagnosis = diagnosis; }
+
+    public String getType() { return type; }
+    public void setType(String type) { this.type = type; }
+
+    public String getTags() { return tags; }
+    public void setTags(String tags) { this.tags = tags; }
+}
+
+class TagsRequest {
+    private String tags;
+
+    public String getTags() { return tags; }
+    public void setTags(String tags) { this.tags = tags; }
 }

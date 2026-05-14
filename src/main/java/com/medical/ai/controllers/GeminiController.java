@@ -27,8 +27,8 @@ public class GeminiController {
     @PostMapping("/query")
     public AiResponse askAi(@RequestBody AiRequest request) {
 
-        // Call the AI Service to get a diagnosis based on the symptoms provided in the query
-        String actualAiResponse = geminiService.getAiDiagnosis(request.getQuery());
+        // Call the AI Service with optional conversation history for context
+        String actualAiResponse = geminiService.getAiDiagnosis(request.getQuery(), request.getConversation());
 
         // Wrap and return the response so the frontend can display it for review
         AiResponse response = new AiResponse();
@@ -44,10 +44,17 @@ public class GeminiController {
  */
 class AiRequest {
     private String query;
+    private Long caseId;
+    private String conversation; // JSON array of previous Q&A pairs
 
-    // Getters and Setters are required for Jackson to deserialize the JSON payload
     public String getQuery() { return query; }
     public void setQuery(String query) { this.query = query; }
+
+    public Long getCaseId() { return caseId; }
+    public void setCaseId(Long caseId) { this.caseId = caseId; }
+
+    public String getConversation() { return conversation; }
+    public void setConversation(String conversation) { this.conversation = conversation; }
 }
 
 /**

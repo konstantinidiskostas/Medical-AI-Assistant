@@ -33,6 +33,11 @@ public class MedicalCase {
     // Πιθανή θεραπεία (μελλοντική υλοποίηση).
     @Column(columnDefinition = "TEXT")
     private String treatment;
+    // Ιστορικό πολλαπλών ερωτήσεων-απαντήσεων σε μορφή JSON array.
+    @Column(columnDefinition = "TEXT")
+    private String conversation;
+    // Ετικέτες (tags) για κατηγοριοποίηση, π.χ. "Διάγνωση,Θεραπεία"
+    private String tags;
     // Η ακριβής ημερομηνία και ώρα που αποθηκεύτηκε το περιστατικό.
     private LocalDateTime date;
 
@@ -84,4 +89,10 @@ public class MedicalCase {
 
     public String getType() { return type; }
     public void setType(String type) { this.type = type; }
+
+    public String getConversation() { return conversation; }
+    public void setConversation(String conversation) { this.conversation = conversation; }
+
+    public String getTags() { return tags; }
+    public void setTags(String tags) { this.tags = tags; }
 }

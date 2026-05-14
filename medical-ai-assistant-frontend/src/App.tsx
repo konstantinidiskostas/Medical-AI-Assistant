@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 function App() {
   // --- States ---
@@ -35,7 +35,65 @@ function App() {
   const [medicalCases, setMedicalCases] = useState<any[]>([]);
   const [aiQuery, setAiQuery] = useState('');
   const [pendingDiagnosis, setPendingDiagnosis] = useState<any | null>(null);
+  const [conversation, setConversation] = useState<any[]>([]);
+  const [currentCaseId, setCurrentCaseId] = useState<number | null>(null);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [customTagInput, setCustomTagInput] = useState('');
+  const [filterTag, setFilterTag] = useState<string>('');
+  const [availableTags, setAvailableTags] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('available_tags');
+      return saved ? JSON.parse(saved) : ["Διάγνωση", "Πρόγνωση", "Θεραπεία", "Εξετάσεις",
+        "Παρακολούθηση", "Παραπομπή", "Επείγον", "Προληπτικός", "Εκπαιδευτικό"];
+    } catch { return ["Διάγνωση", "Πρόγνωση", "Θεραπεία", "Εξετάσεις",
+        "Παρακολούθηση", "Παραπομπή", "Επείγον", "Προληπτικός", "Εκπαιδευτικό"]; }
+  });
+  const [editingTag, setEditingTag] = useState<string | null>(null);
+  const [editTagValue, setEditTagValue] = useState('');
+
+  useEffect(() => { localStorage.setItem('available_tags', JSON.stringify(availableTags)); }, [availableTags]);
+
   const [editingPatient, setEditingPatient] = useState<any>(null);
+
+  // Browser history navigation (back/forward)
+  const isFirstRender = useRef(true);
+
+  useEffect(() => {
+    window.history.replaceState({ view: currentView, patientId: selectedPatient?.patientId }, '');
+  }, []);
+
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    window.history.pushState({ view: currentView, patientId: selectedPatient?.patientId }, '');
+  }, [currentView, selectedPatient?.patientId]);
+
+  useEffect(() => {
+    const handlePopState = (e: PopStateEvent) => {
+      if (e.state && e.state.view) {
+        setCurrentView(e.state.view);
+        if (e.state.view === 'patient-details' && e.state.patientId) {
+          try {
+            const saved = localStorage.getItem('selected_patient');
+            if (saved) {
+              const patient = JSON.parse(saved);
+              if (patient.patientId === e.state.patientId) {
+                setSelectedPatient(patient);
+                return;
+              }
+            }
+          } catch (err) {}
+        } else {
+          setSelectedPatient(null);
+          localStorage.removeItem('selected_patient');
+        }
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   // Auth Inputs
   const [username, setUsername] = useState('');
@@ -229,7 +287,10 @@ function App() {
       const response = await fetch('http://localhost:8080/api/ai/query', {
         method: 'POST',
         headers: getAuthHeaders(),
-        body: JSON.stringify({ query: `${aiQueryType}: ${aiQuery}` }),
+        body: JSON.stringify({
+          query: `${aiQueryType}: ${aiQuery}`,
+          conversation: conversation.length > 0 ? JSON.stringify(conversation) : null
+        }),
       });
 
       if (response.ok) {
@@ -265,33 +326,73 @@ function App() {
   const handleSaveCase = async () => {
     if (!selectedPatient || !aiQuery || !pendingDiagnosis) return;
 
-
     const diagnosisToSave = typeof pendingDiagnosis === 'object'
         ? JSON.stringify(pendingDiagnosis)
         : pendingDiagnosis;
 
-    try {
-      const response = await fetch('http://localhost:8080/api/medical-cases/save', {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({
-          patientId: selectedPatient.patientId,
-          symptoms: aiQuery,
-          diagnosis: diagnosisToSave,
-          type: aiQueryType
-        }),
-      });
+    const conversationEntry = {
+      question: aiQuery,
+      answer: diagnosisToSave,
+      type: aiQueryType
+    };
 
-      if (response.ok) {
-        alert('Το περιστατικό αποθηκεύτηκε επιτυχώς!');
-        setAiQuery('');
-        setPendingDiagnosis(null);
-        fetchMedicalCases(selectedPatient.patientId);
-      } else {
-        alert('Αποτυχία αποθήκευσης στον server.');
+    const tagsString = selectedTags.join(',');
+
+    if (currentCaseId) {
+      // Append to existing case
+      try {
+        const response = await fetch(`http://localhost:8080/api/medical-cases/${currentCaseId}/conversation`, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({
+            symptoms: aiQuery,
+            diagnosis: diagnosisToSave,
+            type: aiQueryType,
+            tags: tagsString
+          }),
+        });
+        if (response.ok) {
+          alert('Το ερώτημα προστέθηκε στο περιστατικό!');
+          setConversation(prev => [...prev, conversationEntry]);
+          setAiQuery('');
+          setPendingDiagnosis(null);
+          fetchMedicalCases(selectedPatient.patientId);
+        } else {
+          alert('Αποτυχία αποθήκευσης στον server.');
+        }
+      } catch (error) {
+        alert('Σφάλμα σύνδεσης κατά την αποθήκευση.');
       }
-    } catch (error) {
-      alert('Σφάλμα σύνδεσης κατά την αποθήκευση.');
+    } else {
+      // Create new case with conversation
+      try {
+        const newConversation = [conversationEntry];
+        const response = await fetch('http://localhost:8080/api/medical-cases/save', {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({
+            patientId: selectedPatient.patientId,
+            symptoms: aiQuery,
+            diagnosis: diagnosisToSave,
+            type: aiQueryType,
+            conversation: JSON.stringify(newConversation),
+            tags: tagsString
+          }),
+        });
+        if (response.ok) {
+          const savedCase = await response.json();
+          alert('Το περιστατικό αποθηκεύτηκε επιτυχώς!');
+          setCurrentCaseId(savedCase.id);
+          setConversation(newConversation);
+          setAiQuery('');
+          setPendingDiagnosis(null);
+          fetchMedicalCases(selectedPatient.patientId);
+        } else {
+          alert('Αποτυχία αποθήκευσης στον server.');
+        }
+      } catch (error) {
+        alert('Σφάλμα σύνδεσης κατά την αποθήκευση.');
+      }
     }
   };
 
@@ -326,6 +427,81 @@ function App() {
     }
   };
 
+  const loadCaseIntoAI = (caseData: any) => {
+    setAiQuery('');
+    setPendingDiagnosis(null);
+
+    if (caseData.conversation) {
+      try {
+        const conv = JSON.parse(caseData.conversation);
+        setConversation(conv);
+      } catch (e) {
+        setConversation([{
+          question: caseData.symptoms,
+          answer: caseData.diagnosis,
+          type: caseData.type
+        }]);
+      }
+    } else {
+      setConversation([{
+        question: caseData.symptoms,
+        answer: caseData.diagnosis,
+        type: caseData.type
+      }]);
+    }
+    setCurrentCaseId(caseData.id);
+    setSelectedTags(caseData.tags ? caseData.tags.split(',').map((t: string) => t.trim()).filter((t: string) => t) : []);
+  };
+
+  const startNewAnalysis = () => {
+    setCurrentCaseId(null);
+    setConversation([]);
+    setPendingDiagnosis(null);
+    setAiQuery('');
+    setSelectedTags([]);
+  };
+
+  const handleSaveTags = async () => {
+    if (!currentCaseId) return;
+    try {
+      const response = await fetch(`http://localhost:8080/api/medical-cases/${currentCaseId}/tags`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ tags: selectedTags.join(',') }),
+      });
+      if (response.ok) {
+        const updated = await response.json();
+        setMedicalCases(prev => prev.map(c => c.id === updated.id ? updated : c));
+      }
+    } catch (error) {
+      console.error('Error saving tags:', error);
+    }
+  };
+
+  const handleAddCustomTag = () => {
+    const tag = customTagInput.trim();
+    if (!tag || selectedTags.includes(tag)) return;
+    setSelectedTags(prev => [...prev, tag]);
+    setAvailableTags(prev => prev.includes(tag) ? prev : [...prev, tag]);
+    setCustomTagInput('');
+  };
+
+  const handleRenameTag = (oldTag: string) => {
+    const newTag = editTagValue.trim();
+    if (newTag && newTag !== oldTag) {
+      setAvailableTags(prev => prev.map(t => t === oldTag ? newTag : t));
+      setSelectedTags(prev => prev.map(t => t === oldTag ? newTag : t));
+    }
+    setEditingTag(null);
+    setEditTagValue('');
+  };
+
+  const handleDeleteTag = (tag: string) => {
+    setAvailableTags(prev => prev.filter(t => t !== tag));
+    setSelectedTags(prev => prev.filter(t => t !== tag));
+    if (filterTag === tag) setFilterTag('');
+  };
+
   const clearPatientForm = () => { setPFirstName(''); setPLastName(''); setPatientAmka(''); setPatientAge(''); setPatientGender(''); setPatientTelephone(''); };
 
   // --- Life Cycle ---
@@ -334,6 +510,7 @@ function App() {
   useEffect(() => {
     if (currentView === 'patient-details' && selectedPatient) {
       fetchMedicalCases(selectedPatient.patientId);
+      startNewAnalysis();
     }
   }, [currentView, selectedPatient]);
 
@@ -526,9 +703,36 @@ function App() {
             </span>
                       </h4>
 
-                      <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+                      {/* Tag filter */}
+                      <div className="flex flex-wrap gap-1.5 mb-4">
+                        <button
+                          onClick={() => setFilterTag('')}
+                          className={`px-3 py-1 rounded-xl text-[9px] font-bold transition-all border ${
+                            !filterTag ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-400'
+                          }`}
+                        >
+                          Όλα
+                        </button>
+                        {availableTags.map(tag => (
+                          <button
+                            key={tag}
+                            onClick={() => setFilterTag(tag === filterTag ? '' : tag)}
+                            className={`px-3 py-1 rounded-xl text-[9px] font-bold transition-all border ${
+                              filterTag === tag ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-500 border-slate-200 hover:border-blue-200 hover:text-blue-600'
+                            }`}
+                          >
+                            {tag}
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="space-y-3 max-h-[440px] overflow-y-auto pr-2 custom-scrollbar">
                         {medicalCases.length > 0 ? (
-                            medicalCases.map((m: any) => {
+                            medicalCases.filter((m: any) => {
+                              if (!filterTag) return true;
+                              const caseTags = m.tags ? m.tags.split(',').map((t: string) => t.trim()).filter((t: string) => t) : [];
+                              return caseTags.includes(filterTag);
+                            }).map((m: any) => {
                               // --- ΑΥΤΟ ΕΙΝΑΙ ΤΟ LOGIC ΠΟΥ ΞΕΡΟΥΜΕ ΟΤΙ ΛΕΙΤΟΥΡΓΕΙ ---
                               let data: any = { diagnosis: "Προβολή...", confidence: "N/A" };
                               try {
@@ -549,8 +753,10 @@ function App() {
                               return (
                                   <div
                                       key={m.id}
-                                      onClick={() => setSelectedCase(m)}
-                                      className="group cursor-pointer bg-white border border-slate-100 rounded-2xl p-5 hover:shadow-md hover:border-blue-200 transition-all duration-200"
+                                      onClick={() => loadCaseIntoAI(m)}
+                                      className={`group cursor-pointer bg-white border rounded-2xl p-5 hover:shadow-md hover:border-blue-200 transition-all duration-200 ${
+                                        currentCaseId === m.id ? 'border-blue-300 ring-1 ring-blue-200' : 'border-slate-100'
+                                      }`}
                                   >
                                     <div className="flex items-center gap-6 text-left">
                                       {/* Στήλη 1: Ημερομηνία */}
@@ -571,16 +777,31 @@ function App() {
                                         <p className="text-sm font-bold text-slate-800 leading-snug line-clamp-1">
                                           {data.diagnosis}
                                         </p>
+                                        {(() => {
+                                          const caseTags = m.tags ? m.tags.split(',').map((t: string) => t.trim()).filter((t: string) => t) : [];
+                                          return caseTags.length > 0 ? (
+                                            <div className="flex flex-wrap gap-1 mt-1.5">
+                                              {caseTags.map((tag: string) => (
+                                                <span key={tag} className="text-[8px] px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-500 font-medium">
+                                                  {tag}
+                                                </span>
+                                              ))}
+                                            </div>
+                                          ) : null;
+                                        })()}
                                       </div>
 
-                                      {/* Στήλη 3: Confidence Score */}
-                                      <div className="w-24 flex-shrink-0 flex flex-col items-end gap-2">
+                                      {/* Στήλη 3: Score + indicator */}
+                                      <div className="w-20 flex-shrink-0 flex flex-col items-end gap-1">
                                         <div className="bg-slate-50/80 px-3 py-1.5 rounded-xl border border-slate-100 text-center w-full">
                                           <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mb-0.5 text-center">Score</p>
                                           <p className="text-[11px] font-black text-blue-600 truncate text-center">
                                             {data.confidence}
                                           </p>
                                         </div>
+                                        {currentCaseId === m.id && (
+                                          <span className="text-[9px] font-bold text-emerald-600">Ενεργό</span>
+                                        )}
                                         <button
                                             onClick={(e) => {
                                               e.stopPropagation();
@@ -605,18 +826,190 @@ function App() {
 
                     {/* ΔΕΞΙΑ ΣΤΗΛΗ: AI ASSISTANT */}
                     <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 flex flex-col h-fit">
-                      <h3 className="text-xl font-bold mb-6 text-slate-800 flex items-center gap-2">
+                      {/* Header with status */}
+                      <div className="flex justify-between items-center mb-6">
+                        <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">AI Medical Assistant</h3>
+                        {currentCaseId && (
+                          <button onClick={startNewAnalysis} className="text-[10px] font-bold text-slate-400 hover:text-blue-600 transition">
+                            ✕ Νέα Ανάλυση
+                          </button>
+                        )}
+                      </div>
 
-                        AI Medical Assistant
-                      </h3>
+                      {/* Active case indicator */}
+                      {currentCaseId && (
+                        <div className="text-[10px] text-emerald-600 font-bold mb-3 bg-emerald-50 px-4 py-2 rounded-xl border border-emerald-100">
+                          Σε εξέλιξη: Περιστατικό #{currentCaseId} — {conversation.length} ερώτηση{conversation.length !== 1 ? 'εις' : ''}
+                        </div>
+                      )}
 
+                      {/* Tag editor (only when a case is loaded) */}
+                      {currentCaseId && (
+                        <div className="mb-4 p-4 bg-slate-50/50 rounded-2xl border border-slate-100 space-y-2">
+                          <div className="flex justify-between items-center">
+                            <p className="text-[9px] font-bold text-slate-400 uppercase">Ετικέτες</p>
+                            <button
+                              onClick={handleSaveTags}
+                              className="text-[9px] font-bold text-blue-600 hover:text-blue-800 transition"
+                            >
+                              ✓ Αποθήκευση
+                            </button>
+                          </div>
+                          {/* Selected tags (all tags with × to remove) */}
+                          {selectedTags.length > 0 && (
+                            <div className="flex flex-wrap gap-1">
+                              {selectedTags.map(tag => (
+                                <span key={tag} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[9px] font-bold bg-blue-600 text-white border border-blue-600">
+                                  {tag}
+                                  <button
+                                    onClick={() => setSelectedTags(prev => prev.filter(t => t !== tag))}
+                                    className="text-white/70 hover:text-white leading-none"
+                                  >×</button>
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                          {/* Unselected predefined tags (click to add) */}
+                          {availableTags.filter(t => !selectedTags.includes(t)).length > 0 && (
+                            <div className="flex flex-wrap gap-1">
+                              {availableTags.filter(t => !selectedTags.includes(t)).map(tag => (
+                                <div key={tag} className="inline-flex items-center gap-0.5">
+                                  {editingTag === tag ? (
+                                    <input
+                                      value={editTagValue}
+                                      onChange={e => setEditTagValue(e.target.value)}
+                                      onBlur={() => handleRenameTag(tag)}
+                                      onKeyDown={e => {
+                                        if (e.key === 'Enter') { e.preventDefault(); handleRenameTag(tag); }
+                                        if (e.key === 'Escape') setEditingTag(null);
+                                      }}
+                                      className="w-20 px-1 py-0.5 text-[9px] border border-blue-300 rounded outline-none focus:ring-1 focus:ring-blue-200"
+                                      autoFocus
+                                    />
+                                  ) : (
+                                    <>
+                                      <button
+                                        onClick={() => setSelectedTags(prev => [...prev, tag])}
+                                        className="px-2 py-1 rounded-lg text-[9px] font-bold border bg-white text-slate-500 border-slate-200 hover:border-blue-200 hover:text-blue-600 transition-all"
+                                      >
+                                        + {tag}
+                                      </button>
+                                      <button
+                                        onClick={() => { setEditingTag(tag); setEditTagValue(tag); }}
+                                        className="text-[9px] text-slate-300 hover:text-blue-500 transition-colors"
+                                        title="Μετονομασία"
+                                      >✎</button>
+                                      <button
+                                        onClick={() => handleDeleteTag(tag)}
+                                        className="text-[9px] text-slate-300 hover:text-red-500 transition-colors"
+                                        title="Διαγραφή"
+                                      >✕</button>
+                                    </>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {/* Add custom tag */}
+                          <div className="flex gap-1.5">
+                            <input
+                              value={customTagInput}
+                              onChange={e => setCustomTagInput(e.target.value)}
+                              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddCustomTag(); } }}
+                              className="flex-1 min-w-0 px-2.5 py-1.5 border border-slate-200 rounded-lg text-[10px] outline-none focus:ring-1 focus:ring-blue-200 bg-white"
+                              placeholder="Νέα ετικέτα..."
+                            />
+                            <button
+                              onClick={handleAddCustomTag}
+                              className="px-2.5 py-1.5 bg-slate-200 hover:bg-slate-300 rounded-lg text-[10px] font-bold text-slate-600 transition"
+                            >
+                              +
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* CONVERSATION HISTORY */}
+                      {conversation.length > 0 && (
+                        <div className="mb-6 max-h-[420px] overflow-y-auto space-y-4 pr-1 custom-scrollbar border border-slate-100 rounded-2xl p-3 bg-slate-50/30">
+                          {conversation.map((entry: any, idx: number) => (
+                            <div key={idx} className="space-y-2">
+                              {/* Question bubble */}
+                              <div className="flex justify-end">
+                                <div className="bg-blue-50 p-3 rounded-2xl rounded-br-md max-w-[92%] border border-blue-100">
+                                  <p className="text-[9px] font-bold text-blue-500 uppercase mb-1">Ερ. {idx + 1} • {entry.type}</p>
+                                  <p className="text-xs text-slate-700">{entry.question}</p>
+                                </div>
+                              </div>
+                              {/* Full Answer Card */}
+                              {(() => {
+                                let d: any = { diagnosis: entry.answer };
+                                try { d = JSON.parse(entry.answer); } catch (e) {}
+                                return (
+                                  <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                                    {/* Diagnosis header */}
+                                    <div className="p-4 border-b border-slate-50">
+                                      <div className="flex justify-between items-start">
+                                        <div className="flex-1 min-w-0">
+                                          <p className="text-[9px] font-black text-blue-500 uppercase tracking-widest mb-0.5">Διάγνωση</p>
+                                          <h4 className="text-sm font-bold text-slate-800">{d.diagnosis}</h4>
+                                        </div>
+                                        <div className="text-right ml-2 shrink-0">
+                                          <p className="text-[8px] font-bold text-slate-400 uppercase">Score</p>
+                                          <span className="text-sm font-black text-blue-600">{d.confidence}</span>
+                                        </div>
+                                      </div>
+                                      {d.analysis && (
+                                        <p className="text-[11px] text-slate-500 italic mt-2 leading-relaxed">{d.analysis}</p>
+                                      )}
+                                    </div>
+                                    {/* Recommendations & Red Flags */}
+                                    {(d.recommendations?.length > 0 || d.red_flags?.length > 0) && (
+                                      <div className="grid grid-cols-2 gap-px bg-slate-100">
+                                        {d.recommendations?.length > 0 && (
+                                          <div className="bg-emerald-50/60 p-3">
+                                            <h5 className="text-[9px] font-bold text-emerald-700 uppercase mb-2">📋 Προτάσεις</h5>
+                                            <ul className="space-y-1">
+                                              {d.recommendations.map((rec: string, ri: number) => (
+                                                <li key={ri} className="flex items-start gap-1.5 text-[10px] text-emerald-900/80">
+                                                  <span className="mt-0.5 w-1 h-1 rounded-full bg-emerald-400 shrink-0"></span>
+                                                  {rec}
+                                                </li>
+                                              ))}
+                                            </ul>
+                                          </div>
+                                        )}
+                                        {d.red_flags?.length > 0 && (
+                                          <div className="bg-rose-50/60 p-3">
+                                            <h5 className="text-[9px] font-bold text-rose-700 uppercase mb-2">⚠️ Red Flags</h5>
+                                            <ul className="space-y-1">
+                                              {d.red_flags.map((flag: string, fi: number) => (
+                                                <li key={fi} className="flex items-start gap-1.5 text-[10px] text-rose-900/80">
+                                                  <span className="mt-0.5 w-1 h-1 rounded-full bg-rose-400 shrink-0"></span>
+                                                  {flag}
+                                                </li>
+                                              ))}
+                                            </ul>
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })()}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Input area */}
                       <div className="space-y-4">
                         <div className="space-y-1">
                           <label className="text-[10px] font-bold text-slate-400 uppercase ml-2">Τύπος Ανάλυσης</label>
                           <select
-                              className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:ring-2 focus:ring-blue-100 outline-none transition"
-                              value={aiQueryType}
-                              onChange={(e) => setAiQueryType(e.target.value)}
+                            className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:ring-2 focus:ring-blue-100 outline-none transition"
+                            value={aiQueryType}
+                            onChange={(e) => setAiQueryType(e.target.value)}
                           >
                             <option>Γενική Ερώτηση</option>
                             <option>Ανάλυση Συμπτωμάτων</option>
@@ -626,88 +1019,110 @@ function App() {
                         </div>
 
                         <div className="space-y-1">
-                          <label className="text-[10px] font-bold text-slate-400 uppercase ml-2">Περιγραφή Συμπτωμάτων</label>
+                          <label className="text-[10px] font-bold text-slate-400 uppercase ml-2">Περιγραφή</label>
                           <textarea
-                              className="w-full p-4 border border-slate-200 rounded-2xl h-40 focus:ring-2 focus:ring-blue-100 outline-none transition bg-slate-50"
-                              placeholder={`Περιγράψτε εδώ τα συμπτώματα για ${aiQueryType}...`}
-                              value={aiQuery}
-                              onChange={e => setAiQuery(e.target.value)}
+                            className="w-full p-4 border border-slate-200 rounded-2xl h-32 focus:ring-2 focus:ring-blue-100 outline-none transition bg-slate-50"
+                            placeholder={`Περιγράψτε εδώ τα συμπτώματα για ${aiQueryType}...`}
+                            value={aiQuery}
+                            onChange={e => setAiQuery(e.target.value)}
                           />
                         </div>
 
                         <button
-                            onClick={handleAskAI}
-                            className="w-full bg-blue-600 text-white py-4 rounded-2xl font-bold hover:bg-blue-700 transition shadow-lg shadow-blue-100"
+                          onClick={handleAskAI}
+                          className="w-full bg-blue-600 text-white py-4 rounded-2xl font-bold hover:bg-blue-700 transition shadow-lg shadow-blue-100"
                         >
                           Έναρξη Ανάλυσης
                         </button>
                       </div>
 
-                      {/* AI RESULT SECTION */}
+                      {/* CURRENT AI RESULT (pending save) */}
                       {pendingDiagnosis && (
-                          <div className="mt-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                            {typeof pendingDiagnosis === 'object' ? (
-                                <div className="space-y-6">
-                                  {/* Diagnosis Card */}
-                                  <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 relative overflow-hidden">
-                                    <div className="absolute top-0 left-0 w-1.5 h-full bg-blue-500"></div>
-                                    <div className="flex justify-between items-start mb-4">
-                                      <div>
-                                        <p className="text-[9px] font-black text-blue-500 uppercase tracking-widest mb-1">Αποτέλεσμα AI</p>
-                                        <h3 className="text-xl font-bold text-slate-800">{pendingDiagnosis.diagnosis}</h3>
-                                      </div>
-                                      <div className="text-right">
-                                        <p className="text-[9px] font-bold text-slate-400 uppercase">Confidence</p>
-                                        <span className="text-lg font-black text-blue-600">{pendingDiagnosis.confidence}</span>
-                                      </div>
-                                    </div>
-                                    <p className="text-slate-600 text-xs leading-relaxed italic border-t border-slate-50 pt-4">
-                                      {pendingDiagnosis.analysis}
-                                    </p>
+                        <div className="mt-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                          {typeof pendingDiagnosis === 'object' ? (
+                            <div className="space-y-6">
+                              {/* Diagnosis Card */}
+                              <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 relative overflow-hidden">
+                                <div className="absolute top-0 left-0 w-1.5 h-full bg-blue-500"></div>
+                                <div className="flex justify-between items-start mb-4">
+                                  <div>
+                                    <p className="text-[9px] font-black text-blue-500 uppercase tracking-widest mb-1">Νέο Αποτέλεσμα AI</p>
+                                    <h3 className="text-xl font-bold text-slate-800">{pendingDiagnosis.diagnosis}</h3>
                                   </div>
-
-                                  <div className="grid grid-cols-2 gap-4">
-                                    <div className="bg-emerald-50 rounded-2xl p-4 border border-emerald-100">
-                                      <h4 className="text-[10px] font-bold text-emerald-700 mb-3 uppercase tracking-wider">📋 Προτάσεις</h4>
-                                      <ul className="space-y-2">
-                                        {pendingDiagnosis.recommendations?.map((rec: string, i: number) => (
-                                            <li key={i} className="flex items-start gap-2 text-[10px] text-emerald-900/80">
-                                              <span className="mt-1 w-1 h-1 rounded-full bg-emerald-400 shrink-0"></span>
-                                              {rec}
-                                            </li>
-                                        ))}
-                                      </ul>
-                                    </div>
-
-                                    <div className="bg-rose-50 rounded-2xl p-4 border border-rose-100">
-                                      <h4 className="text-[10px] font-bold text-rose-700 mb-3 uppercase tracking-wider">⚠️ Red Flags</h4>
-                                      <ul className="space-y-2">
-                                        {pendingDiagnosis.red_flags?.map((flag: string, i: number) => (
-                                            <li key={i} className="flex items-start gap-2 text-[10px] text-rose-900/80">
-                                              <span className="mt-1 w-1 h-1 rounded-full bg-rose-400 shrink-0"></span>
-                                              {flag}
-                                            </li>
-                                        ))}
-                                      </ul>
-                                    </div>
-                                  </div>
-
-                                  <button
-                                      onClick={handleSaveCase}
-                                      className="w-full bg-slate-800 text-white py-4 rounded-2xl font-bold hover:bg-slate-900 transition shadow-xl flex items-center justify-center gap-2"
-                                  >
-                                    ✓ Επιβεβαίωση & Αποθήκευση
-                                  </button>
-                                </div>
-                            ) : (
-                                <div className="flex items-center justify-center p-12 bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200">
-                                  <div className="text-center">
-                                    <div className="animate-spin h-6 w-6 border-3 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
-                                    <p className="text-slate-500 text-xs font-medium">{pendingDiagnosis}</p>
+                                  <div className="text-right">
+                                    <p className="text-[9px] font-bold text-slate-400 uppercase">Confidence</p>
+                                    <span className="text-lg font-black text-blue-600">{pendingDiagnosis.confidence}</span>
                                   </div>
                                 </div>
-                            )}
-                          </div>
+                                <p className="text-slate-600 text-xs leading-relaxed italic border-t border-slate-50 pt-4">
+                                  {pendingDiagnosis.analysis}
+                                </p>
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-4">
+                                <div className="bg-emerald-50 rounded-2xl p-4 border border-emerald-100">
+                                  <h4 className="text-[10px] font-bold text-emerald-700 mb-3 uppercase tracking-wider">📋 Προτάσεις</h4>
+                                  <ul className="space-y-2">
+                                    {pendingDiagnosis.recommendations?.map((rec: string, i: number) => (
+                                      <li key={i} className="flex items-start gap-2 text-[10px] text-emerald-900/80">
+                                        <span className="mt-1 w-1 h-1 rounded-full bg-emerald-400 shrink-0"></span>
+                                        {rec}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+
+                                <div className="bg-rose-50 rounded-2xl p-4 border border-rose-100">
+                                  <h4 className="text-[10px] font-bold text-rose-700 mb-3 uppercase tracking-wider">⚠️ Red Flags</h4>
+                                  <ul className="space-y-2">
+                                    {pendingDiagnosis.red_flags?.map((flag: string, i: number) => (
+                                      <li key={i} className="flex items-start gap-2 text-[10px] text-rose-900/80">
+                                        <span className="mt-1 w-1 h-1 rounded-full bg-rose-400 shrink-0"></span>
+                                        {flag}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              </div>
+
+                              {/* Tag selector */}
+                              <div className="space-y-2">
+                                <p className="text-[10px] font-bold text-slate-400 uppercase ml-1">Ετικέτες</p>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {availableTags.map(tag => (
+                                    <button
+                                      key={tag}
+                                      onClick={() => setSelectedTags(prev =>
+                                        prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
+                                      )}
+                                      className={`px-3 py-1.5 rounded-xl text-[10px] font-bold transition-all border ${
+                                        selectedTags.includes(tag)
+                                          ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                                          : 'bg-white text-slate-500 border-slate-200 hover:border-blue-200 hover:text-blue-600'
+                                      }`}
+                                    >
+                                      {tag}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+
+                              <button
+                                onClick={handleSaveCase}
+                                className="w-full bg-slate-800 text-white py-4 rounded-2xl font-bold hover:bg-slate-900 transition shadow-xl flex items-center justify-center gap-2"
+                              >
+                                ✓ {currentCaseId ? 'Προσθήκη στο Περιστατικό' : 'Επιβεβαίωση & Αποθήκευση'}
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-center p-12 bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200">
+                              <div className="text-center">
+                                <div className="animate-spin h-6 w-6 border-3 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+                                <p className="text-slate-500 text-xs font-medium">{pendingDiagnosis}</p>
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       )}
                     </div>
                   </>
@@ -789,6 +1204,19 @@ function App() {
                 </div>
 
                 <div className="p-8 max-h-[75vh] overflow-y-auto space-y-6 custom-scrollbar text-left">
+                  {/* Tags */}
+                  {(() => {
+                    const modalTags = selectedCase.tags ? selectedCase.tags.split(',').map((t: string) => t.trim()).filter((t: string) => t) : [];
+                    return modalTags.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        {modalTags.map((tag: string) => (
+                          <span key={tag} className="px-2.5 py-1 rounded-xl text-[10px] font-bold bg-blue-50 text-blue-600 border border-blue-100">
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null;
+                  })()}
                   {/* Ενότητα Συμπτωμάτων */}
                   <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm text-left">
                     <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 text-left">Συμπτώματα</h4>

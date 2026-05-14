@@ -67,9 +67,7 @@ public class SecurityConfig {
     public AuthenticationManager authenticationManager(AuthenticationConfiguration authConfig) throws Exception {
         return authConfig.getAuthenticationManager();
     }
-    // Πρόσθεσε αυτό το import στην κορυφή:
-    // import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-    // import org.springframework.security.crypto.password.PasswordEncoder;
+
 
     @Bean
     public PasswordEncoder passwordEncoder() {

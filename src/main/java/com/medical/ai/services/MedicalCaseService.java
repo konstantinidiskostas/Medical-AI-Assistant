@@ -3,10 +3,14 @@ package com.medical.ai.services;
 import com.medical.ai.entities.MedicalCase;
 import com.medical.ai.entities.Patient;
 import com.medical.ai.repositories.MedicalCaseRepository;
+import org.json.JSONArray;
+import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Η κλάση MedicalCaseService λειτουργεί ως το Service Layer
@@ -63,5 +67,58 @@ public class MedicalCaseService {
         return medicalCaseRepository.findAll();
     }
 
+    public Optional<MedicalCase> findById(Long id) {
+        return medicalCaseRepository.findById(id);
+    }
+
+    /**
+     * Προσθέτει ένα νέο ζεύγος ερώτησης-απάντησης στο ιστορικό συνομιλίας (conversation)
+     * ενός υπάρχοντος ιατρικού περιστατικού.
+     * @param caseId Το ID του περιστατικού.
+     * @param symptoms Η νέα ερώτηση/συμπτώματα.
+     * @param diagnosis Η απάντηση του AI.
+     * @param type Ο τύπος ερώτησης.
+     * @param tags Ετικέτες (προαιρετικά, comma-separated).
+     * @return Το ενημερωμένο MedicalCase.
+     */
+    public MedicalCase appendConversation(Long caseId, String symptoms, String diagnosis, String type, String tags) {
+        MedicalCase medicalCase = medicalCaseRepository.findById(caseId)
+                .orElseThrow(() -> new RuntimeException("Case not found with id: " + caseId));
+
+        // Parse existing conversation or create new array
+        JSONArray conversation;
+        if (medicalCase.getConversation() != null && !medicalCase.getConversation().isEmpty()) {
+            conversation = new JSONArray(medicalCase.getConversation());
+        } else {
+            conversation = new JSONArray();
+        }
+
+        // Add new entry
+        JSONObject entry = new JSONObject();
+        entry.put("question", symptoms);
+        entry.put("answer", diagnosis);
+        entry.put("type", type);
+        conversation.put(entry);
+
+        // Update fields for backward compatibility (show latest Q&A in list preview)
+        medicalCase.setSymptoms(symptoms);
+        medicalCase.setDiagnosis(diagnosis);
+        medicalCase.setType(type);
+        medicalCase.setConversation(conversation.toString());
+
+        // Update tags if provided
+        if (tags != null && !tags.isEmpty()) {
+            medicalCase.setTags(tags);
+        }
+
+        return medicalCaseRepository.save(medicalCase);
+    }
+
+    public MedicalCase updateTags(Long id, String tags) {
+        MedicalCase medicalCase = medicalCaseRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Case not found with id: " + id));
+        medicalCase.setTags(tags);
+        return medicalCaseRepository.save(medicalCase);
+    }
 
 }

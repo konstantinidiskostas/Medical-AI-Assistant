@@ -35,27 +35,26 @@ public class GeminiService {
      * @return Την τελική απάντηση του μοντέλου σε μορφή JSON (ως String) ή μήνυμα σφάλματος.
      */
     public String getAiDiagnosis(String incomingQuery) {
+        return getAiDiagnosis(incomingQuery, null);
+    }
+
+    /**
+     * Αποστέλλει το ερώτημα μαζί με το ιστορικό συνομιλίας στο AI για context.
+     * @param incomingQuery Το νέο ερώτημα.
+     * @param conversationJson Ιστορικό προηγούμενων Q&A σε μορφή JSON array (ή null).
+     * @return Η απάντηση του μοντέλου σε μορφή JSON (ως String).
+     */
+    public String getAiDiagnosis(String incomingQuery, String conversationJson) {
         RestTemplate restTemplate = new RestTemplate();
         String requestUrl = apiUrl + "?key=" + apiKey;
         // Διαμόρφωση των HTTP Headers του αιτήματος
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
 
-        // Αρχικοποίηση του κύριου JSON αντικειμένου για το σώμα του αιτήματος
-        JSONObject requestBodyJson = new JSONObject();
-
         // Διαμόρφωση του generationConfig ώστε το μοντέλο να επιστρέφει αυστηρά JSON δεδομένα
         JSONObject generationConfig = new JSONObject();
         generationConfig.put("response_mime_type", "application/json");
 
-
-        requestBodyJson.put("generationConfig", generationConfig);
-        String engineeredPrompt = "";
-        // Προσθήκη στις ρυθμίσεις του JSON για να αναγκάσουμε το output να είναι JSON
-
-        generationConfig.put("response_mime_type", "application/json");
-
-        requestBodyJson.put("generationConfig", generationConfig);
         // Ορισμός του βασικού ρόλου και των αυστηρών οδηγιών μορφοποίησης
         String baseRole = "Είσαι ένας εξειδικευμένος ιατρικός βοηθός AI. "
                 + "Απάντησε ΑΠΟΚΛΕΙΣΤΙΚΑ σε μορφή JSON. Μην συμπεριλάβεις κανένα άλλο κείμενο πριν ή μετά το JSON, ούτε markdown αστεράκια. "
@@ -63,28 +62,55 @@ public class GeminiService {
                 + "Το JSON πρέπει να έχει ακριβώς αυτή τη δομή: "
                 + "{\"diagnosis\": \"...\", \"confidence\": \"...\", \"analysis\": \"...\", \"recommendations\": [], \"red_flags\": []}. ";
 
-        // Ανάλυση Συμπτωμάτων
+        // Build conversation context if history exists
+        String conversationContext = "";
+        if (conversationJson != null && !conversationJson.trim().isEmpty()) {
+            try {
+                JSONArray conversation = new JSONArray(conversationJson);
+                StringBuilder sb = new StringBuilder();
+                sb.append("Προηγούμενη συνομιλία στο ίδιο περιστατικό:\n\n");
+                for (int i = 0; i < conversation.length(); i++) {
+                    JSONObject entry = conversation.getJSONObject(i);
+                    String q = entry.optString("question", "");
+                    String a = entry.optString("answer", "");
+                    String answerText = a;
+                    try {
+                        answerText = new JSONObject(a).optString("diagnosis", a);
+                    } catch (Exception ignored) {}
+                    sb.append("Ιατρός: ").append(q).append("\n");
+                    sb.append("Βοηθός: ").append(answerText).append("\n\n");
+                }
+                sb.append("---\n\n");
+                conversationContext = sb.toString();
+            } catch (Exception ignored) {}
+        }
+
+        String engineeredPrompt = "";
+
+        // Build prompt: first conversation context, then instructions, then new query
         if (incomingQuery.startsWith("Ανάλυση Συμπτωμάτων:")) {
             String actualQuery = incomingQuery.replace("Ανάλυση Συμπτωμάτων:", "").trim();
-            engineeredPrompt = baseRole + "Ανάλυσε τα εξής συμπτώματα: '" + actualQuery + "'. "
+            engineeredPrompt = conversationContext + baseRole + "Ανάλυσε τα εξής συμπτώματα: '" + actualQuery + "'. "
                     + "Στο πεδίο recommendations βάλε μια λίστα από ιατρικές εξετάσεις. "
                     + "Στο πεδίο red_flags βάλε κρίσιμα σημεία προσοχής.";
 
-
         } else if (incomingQuery.startsWith("Επεξήγηση Εξετάσεων:")) {
             String actualQuery = incomingQuery.replace("Επεξήγηση Εξετάσεων:", "").trim();
-            engineeredPrompt = baseRole + "Αποτελέσματα εξετάσεων: '" + actualQuery + "'. "
+            engineeredPrompt = conversationContext + baseRole + "Αποτελέσματα εξετάσεων: '" + actualQuery + "'. "
                     + "Εξήγησε τα αποτελέσματα κλινικά. Χρησιμοποίησε **έντονα γράμματα** για τιμές εκτός φυσιολογικών ορίων και περιέγραψε σύντομα την κλινική τους σημασία.";
 
         } else if (incomingQuery.startsWith("Συμβουλές Πρόληψης:")) {
             String actualQuery = incomingQuery.replace("Συμβουλές Πρόληψης:", "").trim();
-            engineeredPrompt = baseRole + "Ερώτημα πρόληψης: '" + actualQuery + "'. "
+            engineeredPrompt = conversationContext + baseRole + "Ερώτημα πρόληψης: '" + actualQuery + "'. "
                     + "Παράθεσε ιατρικές κατευθυντήριες οδηγίες (guidelines) σε αυστηρή μορφή λίστας με bullets (π.χ. * Οδηγία 1).";
 
         } else {
-            // Γενική Ερώτηση
-            String actualQuery = incomingQuery.replace("Γενική Ερώτηση:", "").trim();
-            engineeredPrompt = baseRole + "Ιατρικό ερώτημα: '" + actualQuery + "'. Δώσε μια άμεση, τεκμηριωμένη και κλινική απάντηση χωρίς περιττολογίες.";
+            // Γενική Ερώτηση (also handles any unknown prefix)
+            String actualQuery = incomingQuery;
+            if (incomingQuery.startsWith("Γενική Ερώτηση:")) {
+                actualQuery = incomingQuery.replace("Γενική Ερώτηση:", "").trim();
+            }
+            engineeredPrompt = conversationContext + baseRole + "Ιατρικό ερώτημα: '" + actualQuery + "'. Δώσε μια άμεση, τεκμηριωμένη και κλινική απάντηση χωρίς περιττολογίες.";
         }
 
         // Κατασκευή της δομής του JSON payload που απαιτεί το Gemini API
@@ -100,7 +126,9 @@ public class GeminiService {
         JSONArray contentsArray = new JSONArray();
         contentsArray.put(content);
 
-        requestBodyJson = new JSONObject();
+        JSONObject requestBodyJson = new JSONObject();
+        // Προσθήκη του generationConfig για να επιστρέφει το AI αυστηρά JSON
+        requestBodyJson.put("generationConfig", generationConfig);
         // Προσθήκη του πίνακα contents στο κύριο σώμα του αιτήματος
         requestBodyJson.put("contents", contentsArray);
         // Δημιουργία του τελικού HTTP Entity που περιέχει το JSON σώμα και τα Headers
