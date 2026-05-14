@@ -30,9 +30,6 @@ public class MedicalCase {
     private String type;
     // Η απάντηση/διάγνωση που έδωσε το AI.
     private String diagnosis;
-    // Πιθανή θεραπεία (μελλοντική υλοποίηση).
-    @Column(columnDefinition = "TEXT")
-    private String treatment;
     // Ιστορικό πολλαπλών ερωτήσεων-απαντήσεων σε μορφή JSON array.
     @Column(columnDefinition = "TEXT")
     private String conversation;
@@ -74,9 +71,6 @@ public class MedicalCase {
 
     public String getDiagnosis() { return diagnosis; }
     public void setDiagnosis(String diagnosis) { this.diagnosis = diagnosis; }
-
-    public String getTreatment() { return treatment; }
-    public void setTreatment(String treatment) { this.treatment = treatment; }
 
     public LocalDateTime getDate() { return date; }
     public void setDate(LocalDateTime date) { this.date = date; }

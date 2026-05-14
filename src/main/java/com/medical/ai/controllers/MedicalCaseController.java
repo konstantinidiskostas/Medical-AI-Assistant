@@ -62,14 +62,8 @@ public class MedicalCaseController {
         newCase.setType(request.getType());
         newCase.setConversation(request.getConversation());
         newCase.setTags(request.getTags());
-        newCase.setDate(LocalDateTime.now()); // Record the exact time of approval
+        newCase.setDate(LocalDateTime.now());
 
-        // If conversation is provided, create a JSON array from it (or store as-is)
-        if (request.getConversation() != null && !request.getConversation().isEmpty()) {
-            newCase.setConversation(request.getConversation());
-        }
-
-        // 3. Persist the record to the database via the Service layer
         return medicalCaseService.createMedicalCase(newCase);
     }
 

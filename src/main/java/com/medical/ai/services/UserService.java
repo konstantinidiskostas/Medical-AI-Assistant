@@ -56,5 +56,26 @@ public class UserService {
 
 
     public List<User> getAllUsers() {
-        return userRepository.findAll(); // Επιστρέφει όλους τους χρήστες καλώντας την έτοιμη μέθοδο του Repository
-    }}
+        return userRepository.findAll();
+    }
+
+    public void deleteUser(Long id) {
+        userRepository.deleteById(id);
+    }
+
+    public User updateUser(Long id, User updated) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("User not found with id: " + id));
+        if (updated.getFirstName() != null) user.setFirstName(updated.getFirstName());
+        if (updated.getLastName() != null) user.setLastName(updated.getLastName());
+        if (updated.getEmail() != null) user.setEmail(updated.getEmail());
+        if (updated.getUsername() != null && !updated.getUsername().equals(user.getUsername())) {
+            if (userRepository.findByUsername(updated.getUsername()).isPresent()) {
+                throw new RuntimeException("Το username '" + updated.getUsername() + "' χρησιμοποιείται ήδη.");
+            }
+            user.setUsername(updated.getUsername());
+        }
+        if (updated.getRole() != null) user.setRole(updated.getRole());
+        return userRepository.save(user);
+    }
+}

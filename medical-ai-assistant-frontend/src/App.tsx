@@ -54,6 +54,12 @@ function App() {
   useEffect(() => { localStorage.setItem('available_tags', JSON.stringify(availableTags)); }, [availableTags]);
 
   const [editingPatient, setEditingPatient] = useState<any>(null);
+  const [editingUser, setEditingUser] = useState<any>(null);
+  const [editUserFirstName, setEditUserFirstName] = useState('');
+  const [editUserLastName, setEditUserLastName] = useState('');
+  const [editUserEmail, setEditUserEmail] = useState('');
+  const [editUserUsername, setEditUserUsername] = useState('');
+  const [editUserRole, setEditUserRole] = useState('');
 
   // Browser history navigation (back/forward)
   const isFirstRender = useRef(true);
@@ -255,7 +261,7 @@ function App() {
         method: 'PUT', headers: getAuthHeaders(),
         body: JSON.stringify({ firstName: pFirstName, lastName: pLastName, amka: patientAmka, age: parseInt(patientAge) || 0, gender: patientGender, telephone: patientTelephone, doctorId: doctorId }),
       });
-      if (response.ok) { alert('Ενημερώθηκε!'); setEditingPatient(null); clearPatientForm(); fetchPatients(); }
+      if (response.ok) { alert('Ενημερώθηκε!'); setEditingPatient(null); clearPatientForm(); fetchPatients(); fetchAdminPatients(); }
     } catch (error) { alert('Σφάλμα ενημέρωσης.'); }
   };
 
@@ -504,6 +510,65 @@ function App() {
 
   const clearPatientForm = () => { setPFirstName(''); setPLastName(''); setPatientAmka(''); setPatientAge(''); setPatientGender(''); setPatientTelephone(''); };
 
+  const startEditUser = (u: any) => {
+    setEditingUser(u);
+    setEditUserFirstName(u.firstName);
+    setEditUserLastName(u.lastName);
+    setEditUserEmail(u.email);
+    setEditUserUsername(u.username);
+    setEditUserRole(u.role);
+  };
+
+  const clearUserForm = () => {
+    setEditingUser(null);
+    setEditUserFirstName('');
+    setEditUserLastName('');
+    setEditUserEmail('');
+    setEditUserUsername('');
+    setEditUserRole('');
+  };
+
+  const handleUpdateUser = async () => {
+    if (!editingUser) return;
+    try {
+      const response = await fetch(`http://localhost:8080/api/users/${editingUser.id}`, {
+        method: 'PUT', headers: getAuthHeaders(),
+        body: JSON.stringify({
+          firstName: editUserFirstName,
+          lastName: editUserLastName,
+          email: editUserEmail,
+          username: editUserUsername,
+          role: editUserRole,
+        }),
+      });
+      if (response.ok) {
+        alert('Ο χρήστης ενημερώθηκε!');
+        clearUserForm();
+        fetchAllUsers();
+      } else {
+        const msg = await response.text();
+        alert(msg || 'Σφάλμα ενημέρωσης χρήστη.');
+      }
+    } catch (error) {
+      alert('Σφάλμα δικτύου.');
+    }
+  };
+
+  const handleDeleteUser = async (id: number) => {
+    if (!window.confirm("Είστε σίγουρος/η ότι θέλετε να διαγράψετε αυτόν τον χρήστη;")) return;
+    try {
+      const response = await fetch(`http://localhost:8080/api/users/${id}`, { method: 'DELETE', headers: getAuthHeaders() });
+      if (response.ok) {
+        alert('Ο χρήστης διαγράφηκε.');
+        fetchAllUsers();
+      } else {
+        alert('Σφάλμα κατά τη διαγραφή.');
+      }
+    } catch (error) {
+      alert('Σφάλμα δικτύου.');
+    }
+  };
+
   // --- Life Cycle ---
   useEffect(() => { if (currentView === 'patients') fetchPatients(); }, [currentView, doctorId]);
   useEffect(() => { if (currentView === 'admin-dashboard') fetchPendingUsers(); }, [currentView]);
@@ -588,27 +653,50 @@ function App() {
 
               {/* Tab: Users */}
               {adminTab === 'users' && (
-                  <div className="space-y-8">
-                    {/* 1. Εκκρεμείς Εγκρίσεις */}
+                  <div className="space-y-6">
+                    {/* Edit user form */}
+                    {editingUser && (
+                      <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
+                        <h2 className="text-2xl font-semibold mb-6">Επεξεργασία Χρήστη</h2>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <input className="p-3 border rounded-xl" placeholder="Όνομα" value={editUserFirstName} onChange={e => setEditUserFirstName(e.target.value)} />
+                          <input className="p-3 border rounded-xl" placeholder="Επώνυμο" value={editUserLastName} onChange={e => setEditUserLastName(e.target.value)} />
+                          <input className="p-3 border rounded-xl" placeholder="Email" value={editUserEmail} onChange={e => setEditUserEmail(e.target.value)} />
+                          <input className="p-3 border rounded-xl" placeholder="Username" value={editUserUsername} onChange={e => setEditUserUsername(e.target.value)} />
+                          <select className="p-3 border rounded-xl bg-white w-full" value={editUserRole} onChange={e => setEditUserRole(e.target.value)}>
+                            <option value="" disabled>Επιλέξτε Ρόλο</option>
+                            <option value="Doctor">Doctor</option>
+                            <option value="Researcher">Researcher</option>
+                            <option value="Admin">Admin</option>
+                          </select>
+                        </div>
+                        <div className="flex gap-3 mt-6">
+                          <button onClick={handleUpdateUser} className="bg-green-600 text-white px-8 py-3 rounded-xl font-semibold hover:bg-green-700">Ενημέρωση</button>
+                          <button onClick={clearUserForm} className="bg-slate-200 text-slate-600 px-8 py-3 rounded-xl font-semibold hover:bg-slate-300">Ακύρωση</button>
+                        </div>
+                      </div>
+                    )}
 
-
-                    {/* 2. Ενεργοί Χρήστες του Συστήματος */}
-
+                    {/* Active Users */}
                     <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
-
+                      <h3 className="text-xl font-bold mb-6 text-slate-700">Ενεργοί Χρήστες</h3>
                       <ul className="grid gap-4">
-                        {allUsers.length > 0 ? allUsers.map((u: any) => (
-                            <li key={u.id} className="bg-slate-50 p-6 rounded-2xl border border-slate-100 flex justify-between items-center">
+                        {allUsers.length > 0 ? allUsers.filter((u: any) => u.id !== doctorId).map((u: any) => (
+                            <li key={u.id} className="bg-white p-6 rounded-2xl shadow-sm border flex justify-between items-center transition hover:shadow-md">
                               <div>
                                 <span className="font-bold text-lg text-slate-800">{u.firstName} {u.lastName}</span>
                                 <p className="text-sm text-slate-500 mt-1">Ρόλος: {u.role} | Username: {u.username} | Email: {u.email}</p>
                               </div>
-                              {/* Κουμπί διαγραφής στα δεξιά, όπως ακριβώς στους ασθενείς */}
-                              <button onClick={() => handleDeleteUser(u.id)} className="text-red-500 font-bold hover:underline transition">Διαγραφή</button>
+                              <div className="flex gap-3">
+                                <button onClick={() => startEditUser(u)} className="text-yellow-600 hover:underline">Επεξεργασία</button>
+                                <button onClick={() => handleDeleteUser(u.id)} className="text-red-500 hover:underline">Διαγραφή</button>
+                              </div>
                             </li>
-                        )) : <p className="text-slate-500 font-medium">Δεν βρέθηκαν εγγεγραμμένοι χρήστες (ή λείπει το Endpoint στο Backend).</p>}
+                        )) : <p className="text-slate-500 font-medium">Δεν βρέθηκαν εγγεγραμμένοι χρήστες.</p>}
                       </ul>
                     </div>
+
+                    {/* Pending Approvals */}
                     <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
                       <h3 className="text-xl font-bold mb-6 text-slate-700">Εκκρεμείς Εγκρίσεις ({allPendingUsers.length})</h3>
                       <ul className="space-y-4">
@@ -627,19 +715,47 @@ function App() {
               )}
               {/* Tab: Patients */}
               {adminTab === 'patients' && (
-                  <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
+                  <div className="space-y-6">
+                    {editingPatient && (
+                      <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
+                        <h2 className="text-2xl font-semibold mb-6">Επεξεργασία Ασθενή</h2>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <input className="p-3 border rounded-xl" placeholder="Όνομα" value={pFirstName} onChange={e => setPFirstName(e.target.value)} />
+                          <input className="p-3 border rounded-xl" placeholder="Επώνυμο" value={pLastName} onChange={e => setPLastName(e.target.value)} />
+                          <input className="p-3 border rounded-xl" placeholder="ΑΜΚΑ (11 ψηφία)" value={patientAmka} onChange={e => setPatientAmka(e.target.value)} maxLength={11} />
+                          <input className="p-3 border rounded-xl" placeholder="Ηλικία" type="number" value={patientAge} onChange={e => setPatientAge(e.target.value)} />
+                          <select className="p-3 border rounded-xl bg-white w-full" value={patientGender || ''} onChange={e => setPatientGender(e.target.value)}>
+                            <option value="" disabled>Επιλέξτε Φύλο</option>
+                            <option value="Άνδρας">Άνδρας</option>
+                            <option value="Γυναίκα">Γυναίκα</option>
+                            <option value="Άλλο">Άλλο</option>
+                          </select>
+                          <input className="p-3 border rounded-xl" placeholder="Τηλέφωνο" value={patientTelephone} onChange={e => setPatientTelephone(e.target.value)} />
+                        </div>
+                        <div className="flex gap-3 mt-6">
+                          <button onClick={handleUpdatePatient} className="bg-green-600 text-white px-8 py-3 rounded-xl font-semibold hover:bg-green-700">Ενημέρωση</button>
+                          <button onClick={() => { setEditingPatient(null); clearPatientForm(); }} className="bg-slate-200 text-slate-600 px-8 py-3 rounded-xl font-semibold hover:bg-slate-300">Ακύρωση</button>
+                        </div>
+                      </div>
+                    )}
 
-                    <ul className="grid gap-4">
-                      {adminPatients.length > 0 ? adminPatients.map((p: any) => (
-                          <li key={p.patientId} className="bg-slate-50 p-6 rounded-2xl border border-slate-100 flex justify-between items-center">
-                            <div>
-                              <span className="font-bold text-lg text-slate-800">{p.firstName} {p.lastName}</span>
-                              <p className="text-sm text-slate-500 mt-1">ΑΜΚΑ: {p.amka} | Ηλικία: {p.age} | Φύλο: {p.gender}</p>
-                            </div>
-                            <button onClick={() => handleDeletePatient(p.patientId)} className="text-red-500 font-bold hover:underline transition">Διαγραφή</button>
-                          </li>
-                      )) : <p className="text-slate-500 font-medium">Δεν βρέθηκαν ασθενείς ή εκκρεμεί το API στο Backend.</p>}
-                    </ul>
+                    <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
+                      <h3 className="text-xl font-bold mb-6 text-slate-700">Όλοι οι Ασθενείς</h3>
+                      <ul className="grid gap-4">
+                        {adminPatients.length > 0 ? adminPatients.map((p: any) => (
+                            <li key={p.patientId} className="bg-white p-6 rounded-2xl shadow-sm border flex justify-between items-center transition hover:shadow-md">
+                              <div>
+                                <span className="font-bold text-lg text-slate-800">{p.firstName} {p.lastName}</span>
+                                <p className="text-sm text-slate-500 mt-1">ΑΜΚΑ: {p.amka} | Ηλικία: {p.age} | Φύλο: {p.gender}</p>
+                              </div>
+                              <div className="flex gap-3">
+                                <button onClick={() => startEdit(p)} className="text-yellow-600 hover:underline">Επεξεργασία</button>
+                                <button onClick={() => handleDeletePatient(p.patientId)} className="text-red-500 hover:underline">Διαγραφή</button>
+                              </div>
+                            </li>
+                        )) : <p className="text-slate-500 font-medium">Δεν βρέθηκαν ασθενείς.</p>}
+                      </ul>
+                    </div>
                   </div>
               )}
 

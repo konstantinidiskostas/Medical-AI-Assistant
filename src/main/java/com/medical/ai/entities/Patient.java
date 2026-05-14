@@ -119,13 +119,4 @@ public class Patient {
     public List<MedicalCase> getMedicalCases() { return medicalCases; }
     public void setMedicalCases(List<MedicalCase> medicalCases) { this.medicalCases = medicalCases; }
 
-    /**
-     * Βοηθητική Μέθοδος:
-     * Όταν προσθέτουμε ένα νέο περιστατικό στον Ασθενή, φροντίζει να πει και στο περιστατικό
-     * "Εσύ ανήκεις σε αυτόν τον Ασθενή", "δένοντας" τη σχέση και από τις δύο πλευρές!
-     */
-    public void addMedicalCase(MedicalCase medicalCase) {
-        this.medicalCases.add(medicalCase);
-        medicalCase.setPatient(this);
-    }
 }
