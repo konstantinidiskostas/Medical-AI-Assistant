@@ -29,7 +29,7 @@ public class MedicalCase {
     private String symptoms;
     // Ο τύπος της ερώτησης (π.χ. "Ανάλυση Συμπτωμάτων", "Γενική Ερώτηση")
     private String type;
-    // Η απάντηση/διάγνωση που έδωσε το AI.
+    // Η απάντηση/διάγνωση που έδωσε το AI .
     private String diagnosis;
     // Ιστορικό πολλαπλών ερωτήσεων-απαντήσεων σε μορφή JSON array.
     @Column(columnDefinition = "TEXT")
