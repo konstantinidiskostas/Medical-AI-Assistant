@@ -5,32 +5,32 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
 /**
- * REST Controller for handling AI-powered medical queries.
- * This controller acts as the bridge between the Frontend and the AI Service (Gemini).
+ * REST Controller για AI ιατρικά ερωτήματα.
+ * Αποτελεί τη γέφυρα μεταξύ Frontend και AI Service (Gemini).
  */
 @RestController
 @RequestMapping("/api/ai")
-@CrossOrigin(origins = "http://localhost:5173") // Allow requests from React development server
+@CrossOrigin(origins = "http://localhost:5173") // Επιτρέπει κλήσεις από το React development server
 public class GeminiController {
 
     @Autowired
     private GeminiService geminiService;
 
     /**
-     * Handles POST requests for AI-assisted diagnosis.
-     * 1. Consults the Gemini AI model with the provided symptoms.
-     * 2. Returns the AI response to the frontend for doctor review.
-     * NOTE: This endpoint no longer persists the case directly to the database.
-     * * @param request The data transfer object containing the symptom query.
-     * @return The AI-generated diagnosis wrapped in an AiResponse object.
+     * Δέχεται POST αιτήματα για AI διάγνωση.
+     * 1. Ερωτά το μοντέλο Gemini AI με τα συμπτώματα
+     * 2. Επιστρέφει την AI απόκριση στο frontend για έλεγχο
+     *
+     * @param request Το DTO που περιέχει το ερώτημα
+     * @return Η AI διάγνωση σε ένα AiResponse αντικείμενο
      */
     @PostMapping("/query")
     public AiResponse askAi(@RequestBody AiRequest request) {
 
-        // Call the AI Service with optional conversation history for context
+        // Κλήση AI Service με προαιρετικό ιστορικό συνομιλίας
         String actualAiResponse = geminiService.getAiDiagnosis(request.getQuery(), request.getConversation());
 
-        // Wrap and return the response so the frontend can display it for review
+        // Τυλίγουμε την απόκριση για εμφάνιση στο frontend
         AiResponse response = new AiResponse();
         response.setDiagnosis(actualAiResponse);
 
@@ -39,13 +39,13 @@ public class GeminiController {
 }
 
 /**
- * Data Transfer Object (DTO) for incoming AI requests.
- * Ensures strict data typing for JSON communication between Frontend and Backend.
+ * DTO για εισερχόμενα AI ερωτήματα.
+ * Εξασφαλίζει αυστηρούς τύπους δεδομένων για JSON επικοινωνία.
  */
 class AiRequest {
     private String query;
     private Long caseId;
-    private String conversation; // JSON array of previous Q&A pairs
+    private String conversation; // Πίνακας JSON με προηγούμενα Q&A ζεύγη
 
     public String getQuery() { return query; }
     public void setQuery(String query) { this.query = query; }
@@ -58,8 +58,8 @@ class AiRequest {
 }
 
 /**
- * Data Transfer Object (DTO) for outgoing AI responses.
- * Used to send the generated diagnosis back to the frontend cleanly.
+ * DTO για εξερχόμενες AI αποκρίσεις.
+ * Στέλνει την παραγόμενη διάγνωση στο frontend.
  */
 class AiResponse {
     private String diagnosis;

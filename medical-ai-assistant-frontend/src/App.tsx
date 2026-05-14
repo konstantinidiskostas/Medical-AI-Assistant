@@ -1,11 +1,40 @@
 import { useState, useEffect, useRef } from 'react';
+import LoginForm from './components/LoginForm';
+import type { RegisterData } from './components/LoginForm';
+import CaseModal from './components/CaseModal';
+// Σημείωση: ConversationHistory, TagFilter, DiagnosisAnswerCard
+// χρησιμοποιούνται στα AdminPanel και PatientDetailsView
+import AdminPanel from './components/AdminPanel';
+import PatientDetailsView from './components/PatientDetailsView';
+import { API_BASE_URL, getAuthHeaders, apiFetch } from './utils/api';
+
+/**
+ * ================================================================
+ * Ιατρικός Βοηθός AI — Frontend (React + TypeScript)
+ * ================================================================
+ *
+ * ΚΕΝΤΡΙΚΟ COMPONENT: Διαχειρίζεται όλη την κατάσταση (state)
+ * της εφαρμογής και συντονίζει τα υπο-components.
+ *
+ * Τα υπο-components βρίσκονται πλέον σε ξεχωριστά αρχεία:
+ * - LoginForm: φόρμα σύνδεσης/εγγραφής
+ * - CaseModal: modal προβολής περιστατικού
+ * - ConversationHistory: chat bubbles με διαγνώσεις
+ * - TagFilter: κουμπιά φιλτραρίσματος ετικετών
+ * - DiagnosisAnswerCard: κάρτα αποτελέσματος AI
+ *
+ * ΡΟΗ ΛΕΙΤΟΥΡΓΙΑΣ:
+ * 1. Ο χρήστης συνδέεται (login) → παίρνει JWT
+ * 2. Βλέπει το dashboard (γιατρός) ή admin panel
+ * 3. Δημιουργεί/βλέπει ασθενείς, περιστατικά, AI διάγνωση
+ * 4. Αποσυνδέεται (logout) → διαγράφονται τα στοιχεία σύνδεσης
+ */
 
 function App() {
   // --- States ---
   const [isLoggedIn, setIsLoggedIn] = useState(() => !!localStorage.getItem('jwtToken'));
-  const [isRegistering, setIsRegistering] = useState(false);
   const [currentView, setCurrentView] = useState(() => localStorage.getItem('app_view') || 'dashboard');
-  const [userRole, setUserRole] = useState(() => localStorage.getItem('userRole') || '');
+  // ΣΗΜΕΙΩΣΗ: Ο ρόλος χρήστη αποθηκεύεται/διαβάζεται απευθείας από το localStorage
   const [aiQueryType, setAiQueryType] = useState('Γενική Ερώτηση');
   const [adminTab, setAdminTab] = useState('users');
   const [adminPatients, setAdminPatients] = useState<any[]>([]);
@@ -62,7 +91,7 @@ function App() {
   const [editUserUsername, setEditUserUsername] = useState('');
   const [editUserRole, setEditUserRole] = useState('');
 
-  // Browser history navigation (back/forward)
+  // Πλοήγηση ιστορικού browser (πίσω/εμπρός κουμπιά)
   const isFirstRender = useRef(true);
 
   useEffect(() => {
@@ -102,23 +131,24 @@ function App() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
-  // Auth Inputs
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [regFirstName, setRegFirstName] = useState('');
-  const [regLastName, setRegLastName] = useState('');
-  const [regEmail, setRegEmail] = useState('');
-  const [regUsername, setRegUsername] = useState('');
-  const [regPassword, setRegPassword] = useState('');
-  const [regRole, setRegRole] = useState('');
-
-  // Patient Inputs
+  // Φόρμα ασθενή (όνομα, επώνυμο, ΑΜΚΑ, ηλικία, φύλο, τηλέφωνο)
   const [pFirstName, setPFirstName] = useState('');
   const [pLastName, setPLastName] = useState('');
   const [patientAmka, setPatientAmka] = useState('');
   const [patientAge, setPatientAge] = useState('');
   const [patientGender, setPatientGender] = useState('');
   const [patientTelephone, setPatientTelephone] = useState('');
+
+  // --- Loading States ---
+  const [patientsLoading, setPatientsLoading] = useState(false);
+  const [casesLoading, setCasesLoading] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
+
+  const Spinner = () => (
+    <div className="flex justify-center items-center py-8">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
+    </div>
+  );
 
   // --- Helpers ---
 
@@ -128,32 +158,30 @@ function App() {
     else localStorage.removeItem('selected_patient');
   }, [selectedPatient]);
 
-  const getAuthHeaders = () => {
-    const token = localStorage.getItem('jwtToken');
-    return { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
-  };
-
   // --- API Calls ---
+  // =====================
+  // ΦΟΡΤΩΣΗ ΔΕΔΟΜΕΝΩΝ (Data Fetching)
+  // =====================
   const fetchPatients = async () => {
-    if (doctorId) {
-      try {
-        const response = await fetch(`http://localhost:8080/api/patients/doctor/${doctorId}`, { headers: getAuthHeaders() });
-        if (response.ok) setPatients(await response.json());
-      } catch (error) { console.error("Error:", error); }
-    }
+    setPatientsLoading(true);
+    try {
+      const response = await apiFetch(`${API_BASE_URL}/api/patients/doctor/${doctorId}`, { headers: getAuthHeaders() });
+      if (response.ok) setPatients(await response.json());
+    } catch (error) { console.error("Σφάλμα φόρτωσης ασθενών:", error); }
+    finally { setPatientsLoading(false); }
   };
   const fetchAdminPatients = async () => {
     try {
-      const response = await fetch('http://localhost:8080/api/patients', { headers: getAuthHeaders() });
+      const response = await apiFetch(`${API_BASE_URL}/api/patients`, { headers: getAuthHeaders() });
       if (response.ok) setAdminPatients(await response.json());
-    } catch (error) { console.error("Error fetching all patients:", error); }
+    } catch (error) { console.error("Σφάλμα φόρτωσης όλων των ασθενών:", error); }
   };
 
   const fetchAdminCases = async () => {
     try {
-      const response = await fetch('http://localhost:8080/api/medical-cases', { headers: getAuthHeaders() });
+      const response = await apiFetch(`${API_BASE_URL}/api/medical-cases`, { headers: getAuthHeaders() });
       if (response.ok) setAdminCases(await response.json());
-    } catch (error) { console.error("Error fetching all cases:", error); }
+    } catch (error) { console.error("Σφάλμα φόρτωσης περιστατικών:", error); }
   };
 
   useEffect(() => {
@@ -168,48 +196,54 @@ function App() {
   }, [currentView, adminTab]);
   const fetchAllUsers = async () => {
     try {
-      const response = await fetch('http://localhost:8080/api/users', { headers: getAuthHeaders() });
+      const response = await apiFetch(`${API_BASE_URL}/api/users`, { headers: getAuthHeaders() });
       if (response.ok) setAllUsers(await response.json());
-    } catch (error) { console.error("Error fetching all users:", error); }
+    } catch (error) { console.error("Σφάλμα φόρτωσης χρηστών:", error); }
   };
   const fetchPendingUsers = async () => {
     try {
-      const response = await fetch('http://localhost:8080/api/users/pending', { headers: getAuthHeaders() });
+      const response = await apiFetch(`${API_BASE_URL}/api/users/pending`, { headers: getAuthHeaders() });
       if (response.ok) setAllPendingUsers(await response.json());
-    } catch (error) { console.error("Error fetching pending:", error); }
+    } catch (error) { console.error("Σφάλμα φόρτωσης εκκρεμών:", error); }
   };
 
   const fetchMedicalCases = async (patientId: number) => {
+    setCasesLoading(true);
     try {
-      const response = await fetch(`http://localhost:8080/api/medical-cases/patient/${patientId}`, { headers: getAuthHeaders() });
+      const response = await apiFetch(`${API_BASE_URL}/api/medical-cases/patient/${patientId}`, { headers: getAuthHeaders() });
       if (response.ok) setMedicalCases(await response.json());
-    } catch (error) { console.error("Error fetching cases:", error); }
+    } catch (error) { console.error("Σφάλμα φόρτωσης περιστατικών:", error); }
+    finally { setCasesLoading(false); }
   };
 
   const handleApprove = async (userId: number) => {
     try {
-      const response = await fetch(`http://localhost:8080/api/users/approve/${userId}`, { method: 'PUT', headers: getAuthHeaders() });
+      const response = await apiFetch(`${API_BASE_URL}/api/users/approve/${userId}`, { method: 'PUT', headers: getAuthHeaders() });
       if (response.ok) fetchPendingUsers();
     } catch (error) { alert('Σφάλμα έγκρισης'); }
   };
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
+  /** Είσοδος χρήστη: καλείται από το LoginForm με τα στοιχεία */
+  const handleLogin = async (username: string, password: string) => {
     try {
-      const response = await fetch('http://localhost:8080/api/users/login', {
+      const response = await apiFetch(`${API_BASE_URL}/api/users/login`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
       });
       if (response.ok) {
         const data = await response.json();
+        const user = data?.user;
+        if (!user) { alert('Σφάλμα: άκυρη απάντηση από τον server.'); return; }
+
         localStorage.setItem('jwtToken', data.token);
-        localStorage.setItem('doctorId', data.user.id);
-        localStorage.setItem('userRole', data.user.role);
-        setUserRole(data.user.role);
-        setDoctorId(data.user.id);
+        localStorage.setItem('doctorId', user.id);
+        localStorage.setItem('userRole', user.role);
+        // Ο ρόλος αποθηκεύεται στο localStorage, χρησιμοποιείται για ελέγχους πρόσβασης
+        setDoctorId(user.id);
         setIsLoggedIn(true);
 
-        if (data.user.role.toLowerCase() === 'admin') {
+        const role = (user.role || '').toLowerCase();
+        if (role === 'admin') {
           setCurrentView('admin-dashboard');
           localStorage.setItem('app_view', 'admin-dashboard');
         } else {
@@ -220,62 +254,68 @@ function App() {
     } catch (error) { alert('Σφάλμα σύνδεσης'); }
   };
 
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!regRole) { alert('Επιλέξτε ιδιότητα.'); return; }
+  /** Εγγραφή νέου χρήστη: καλείται από το LoginForm */
+  const handleRegister = async (data: RegisterData) => {
     try {
-      const response = await fetch('http://localhost:8080/api/users/register', {
+      const response = await apiFetch(`${API_BASE_URL}/api/users/register`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ firstName: regFirstName, lastName: regLastName, email: regEmail, username: regUsername, password: regPassword, role: regRole }),
+        body: JSON.stringify(data),
       });
-      if (response.ok) { alert('Επιτυχής Εγγραφή!'); setIsRegistering(false); setUsername(''); setPassword(''); }
+      if (response.ok) { alert('Επιτυχής Εγγραφή!'); }
       else alert('Σφάλμα εγγραφής.');
     } catch (error) { alert('Σφάλμα δικτύου.'); }
   };
 
+  /** Αποσύνδεση: διαγράφει μόνο τα κλειδιά αυθεντικοποίησης (όχι ρυθμίσεις) */
   const handleLogout = () => {
-    localStorage.clear();
+    localStorage.removeItem('jwtToken');
+    localStorage.removeItem('doctorId');
+    localStorage.removeItem('userRole');
+    localStorage.removeItem('isLoggedIn');
+    localStorage.removeItem('app_view');
+    localStorage.removeItem('selected_patient');
     setIsLoggedIn(false);
-    setUserRole('');
+    // Ο ρόλος διαγράφεται από το localStorage στο removeItem πιο πάνω
     setDoctorId(null);
     setCurrentView('dashboard');
     setSelectedPatient(null);
-    setUsername('');
-    setPassword('');
-    setRegFirstName(''); setRegLastName(''); setRegEmail('');
-    setRegUsername(''); setRegPassword(''); setRegRole('');
   };
 
   const handleAddPatient = async () => {
     if (!pFirstName || !pLastName || !patientAmka || !patientAge || !patientGender || !patientTelephone) { alert("Παρακαλώ συμπληρώστε όλα τα πεδία."); return; }
     if (!/^\d{11}$/.test(patientAmka)) { alert("Το ΑΜΚΑ πρέπει να είναι 11 ψηφία."); return; }
 
+    setActionLoading(true);
     try {
-      const response = await fetch('http://localhost:8080/api/patients', {
+      const response = await apiFetch(`${API_BASE_URL}/api/patients`, {
         method: 'POST', headers: getAuthHeaders(),
-        body: JSON.stringify({ firstName: pFirstName, lastName: pLastName, amka: patientAmka, age: parseInt(patientAge), gender: patientGender, telephone: patientTelephone, doctorId: doctorId }),
+        body: JSON.stringify({ firstName: pFirstName, lastName: pLastName, amka: patientAmka, age: parseInt(patientAge), gender: patientGender, telephone: patientTelephone }),
       });
       if (response.ok) { alert('Προστέθηκε επιτυχώς!'); fetchPatients(); clearPatientForm(); }
     } catch (error) { alert('Σφάλμα κατά την προσθήκη.'); }
+    finally { setActionLoading(false); }
   };
 
   const handleUpdatePatient = async () => {
     if (!editingPatient) return;
+    setActionLoading(true);
     try {
-      const response = await fetch(`http://localhost:8080/api/patients/${editingPatient.patientId}`, {
+      const response = await apiFetch(`${API_BASE_URL}/api/patients/${editingPatient.patientId}`, {
         method: 'PUT', headers: getAuthHeaders(),
-        body: JSON.stringify({ firstName: pFirstName, lastName: pLastName, amka: patientAmka, age: parseInt(patientAge) || 0, gender: patientGender, telephone: patientTelephone, doctorId: doctorId }),
+        body: JSON.stringify({ firstName: pFirstName, lastName: pLastName, amka: patientAmka, age: parseInt(patientAge) || 0, gender: patientGender, telephone: patientTelephone }),
       });
       if (response.ok) { alert('Ενημερώθηκε!'); setEditingPatient(null); clearPatientForm(); fetchPatients(); fetchAdminPatients(); }
     } catch (error) { alert('Σφάλμα ενημέρωσης.'); }
+    finally { setActionLoading(false); }
   };
 
   const handleDeletePatient = async (id: number) => {
     if (!window.confirm("Είστε σίγουρος/η ότι θέλετε να διαγράψετε αυτόν τον ασθενή;")) {
       return;
     }
+    setActionLoading(true);
     try {
-      const response = await fetch(`http://localhost:8080/api/patients/${id}`, {
+      const response = await apiFetch(`${API_BASE_URL}/api/patients/${id}`, {
         method: 'DELETE',
         headers: getAuthHeaders()
       });
@@ -287,7 +327,7 @@ function App() {
       }
     } catch (error) {
       alert('Σφάλμα δικτύου.');
-    }
+    } finally { setActionLoading(false); }
   };
 
   const handleAskAI = async () => {
@@ -295,7 +335,7 @@ function App() {
     setPendingDiagnosis("Ανάλυση σε εξέλιξη...");
 
     try {
-      const response = await fetch('http://localhost:8080/api/ai/query', {
+      const response = await apiFetch(`${API_BASE_URL}/api/ai/query`, {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify({
@@ -310,7 +350,8 @@ function App() {
         // Πρέπει να καθαρίσουμε το κείμενο πριν το κάνουμε parse
         let rawText = data.diagnosis || data.response || data.answer || data;
 
-        console.log("Raw AI Response:", rawText); // Δες το στο F12 console
+        // Debug: βλέπουμε την απάντηση στο console (αφαιρέστε σε παραγωγή)
+        // console.log("Raw AI Response:", rawText);
 
         if (typeof rawText === 'string') {
           // Καθαρισμός από τυχόν ```json ή ``` tags που βάζει το AI
@@ -318,18 +359,18 @@ function App() {
 
           try {
             const parsed = JSON.parse(cleanedText);
-            console.log("Parsed Object:", parsed);
-            setPendingDiagnosis(parsed); // Εδώ μπαίνει το αντικείμενο
+            // console.log("Parsed Object:", parsed);
+            setPendingDiagnosis(parsed);
           } catch (e) {
-            console.error("JSON Parse Error:", e);
-            setPendingDiagnosis(rawText); // Fallback στο κείμενο αν αποτύχει
+            console.error("Σφάλμα ανάλυσης JSON από AI:", e);
+            setPendingDiagnosis(rawText);
           }
         } else {
           setPendingDiagnosis(rawText);
         }
       }
     } catch (error) {
-      console.error("Fetch Error:", error);
+      console.error("Σφάλμα κλήσης AI:", error);
       setPendingDiagnosis("Σφάλμα σύνδεσης με το AI.");
     }
   };
@@ -350,9 +391,9 @@ function App() {
     const tagsString = selectedTags.join(',');
 
     if (currentCaseId) {
-      // Append to existing case
+      // Προσθήκη σε υπάρχον περιστατικό (νέο ερώτημα)
       try {
-        const response = await fetch(`http://localhost:8080/api/medical-cases/${currentCaseId}/conversation`, {
+        const response = await apiFetch(`${API_BASE_URL}/api/medical-cases/${currentCaseId}/conversation`, {
           method: 'POST',
           headers: getAuthHeaders(),
           body: JSON.stringify({
@@ -375,10 +416,10 @@ function App() {
         alert('Σφάλμα σύνδεσης κατά την αποθήκευση.');
       }
     } else {
-      // Create new case with conversation
+      // Δημιουργία νέου περιστατικού (πρώτο ερώτημα)
       try {
         const newConversation = [conversationEntry];
-        const response = await fetch('http://localhost:8080/api/medical-cases/save', {
+        const response = await apiFetch(`${API_BASE_URL}/api/medical-cases/save`, {
           method: 'POST',
           headers: getAuthHeaders(),
           body: JSON.stringify({
@@ -407,22 +448,14 @@ function App() {
     }
   };
 
-  const startEdit = (p: any) => {
-    setEditingPatient(p);
-    setPFirstName(p.firstName);
-    setPLastName(p.lastName);
-    setPatientAmka(p.amka);
-    setPatientAge(p.age.toString());
-    setPatientGender(p.gender);
-    setPatientTelephone(p.telephone);
-  };
+  /** Διαγραφή περιστατικού με επιβεβαίωση */
   const handleDeleteCase = async (caseId: number) => {
     if (!window.confirm("Είστε σίγουρος/η ότι θέλετε να διαγράψετε αυτό το περιστατικό από το ιστορικό;")) {
       return;
     }
 
     try {
-      const response = await fetch(`http://localhost:8080/api/medical-cases/${caseId}`, {
+      const response = await apiFetch(`${API_BASE_URL}/api/medical-cases/${caseId}`, {
         method: 'DELETE',
         headers: getAuthHeaders()
       });
@@ -475,7 +508,7 @@ function App() {
   const handleSaveTags = async () => {
     if (!currentCaseId) return;
     try {
-      const response = await fetch(`http://localhost:8080/api/medical-cases/${currentCaseId}/tags`, {
+      const response = await apiFetch(`${API_BASE_URL}/api/medical-cases/${currentCaseId}/tags`, {
         method: 'PUT',
         headers: getAuthHeaders(),
         body: JSON.stringify({ tags: selectedTags.join(',') }),
@@ -485,7 +518,7 @@ function App() {
         setMedicalCases(prev => prev.map(c => c.id === updated.id ? updated : c));
       }
     } catch (error) {
-      console.error('Error saving tags:', error);
+      console.error('Σφάλμα αποθήκευσης ετικετών:', error);
     }
   };
 
@@ -515,6 +548,17 @@ function App() {
 
   const clearPatientForm = () => { setPFirstName(''); setPLastName(''); setPatientAmka(''); setPatientAge(''); setPatientGender(''); setPatientTelephone(''); };
 
+  /** Έναρξη επεξεργασίας ασθενή: γεμίζει τη φόρμα με τα υπάρχοντα στοιχεία */
+  const startEdit = (p: any) => {
+    setEditingPatient(p);
+    setPFirstName(p.firstName);
+    setPLastName(p.lastName);
+    setPatientAmka(p.amka);
+    setPatientAge(String(p.age));
+    setPatientGender(p.gender);
+    setPatientTelephone(p.telephone);
+  };
+
   const startEditUser = (u: any) => {
     setEditingUser(u);
     setEditUserFirstName(u.firstName);
@@ -536,7 +580,7 @@ function App() {
   const handleUpdateUser = async () => {
     if (!editingUser) return;
     try {
-      const response = await fetch(`http://localhost:8080/api/users/${editingUser.id}`, {
+      const response = await apiFetch(`${API_BASE_URL}/api/users/${editingUser.id}`, {
         method: 'PUT', headers: getAuthHeaders(),
         body: JSON.stringify({
           firstName: editUserFirstName,
@@ -559,10 +603,11 @@ function App() {
     }
   };
 
+  /** Διαγραφή χρήστη με επιβεβαίωση */
   const handleDeleteUser = async (id: number) => {
     if (!window.confirm("Είστε σίγουρος/η ότι θέλετε να διαγράψετε αυτόν τον χρήστη;")) return;
     try {
-      const response = await fetch(`http://localhost:8080/api/users/${id}`, { method: 'DELETE', headers: getAuthHeaders() });
+      const response = await apiFetch(`${API_BASE_URL}/api/users/${id}`, { method: 'DELETE', headers: getAuthHeaders() });
       if (response.ok) {
         alert('Ο χρήστης διαγράφηκε.');
         fetchAllUsers();
@@ -584,47 +629,11 @@ function App() {
     }
   }, [currentView, selectedPatient]);
 
-  // --- UI RENDER ---
+  // =====================
+  // RENDER: ΟΘΟΝΗ ΣΥΝΔΕΣΗΣ (LoginForm component)
+  // =====================
   if (!isLoggedIn) {
-    return (
-        <div className="min-h-screen flex items-center justify-center bg-[#f7f9fc] p-4 font-sans">
-          <div className="bg-white p-10 rounded-3xl shadow-2xl w-full max-w-lg border border-slate-100 flex flex-col items-center">
-            <div className="text-6xl mb-6">🩺</div>
-            <h1 className="text-4xl font-extrabold text-blue-600 mb-2">{isRegistering ? 'Εγγραφή' : 'Είσοδος'}</h1>
-            <form onSubmit={isRegistering ? handleRegister : handleLogin} className="flex flex-col gap-5 w-full">
-              {isRegistering && (
-                  <>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1 ml-1">Όνομα</label><input className="w-full p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-100" placeholder="Όνομα" onChange={e => setRegFirstName(e.target.value)} required /></div>
-                      <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1 ml-1">Επώνυμο</label><input className="w-full p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-100" placeholder="Επώνυμο" onChange={e => setRegLastName(e.target.value)} required /></div>
-                    </div>
-                    <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1 ml-1">Email</label><input type="email" className="w-full p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-100" placeholder="email@example.com" onChange={e => setRegEmail(e.target.value)} required /></div>
-                    <div>
-                      <label className="block text-xs font-bold text-slate-500 uppercase mb-1 ml-1">Ιδιότητα</label>
-                      <select className="w-full p-3 border border-slate-200 rounded-xl outline-none bg-white focus:ring-2 focus:ring-blue-100" value={regRole} onChange={(e) => setRegRole(e.target.value)} required>
-                        <option value="" disabled>Επιλέξτε Ιδιότητα</option>
-                        <option value="Doctor">Γιατρός</option>
-                        <option value="Researcher">Ερευνητής</option>
-                        <option value="Admin">Administrator</option>
-                      </select>
-                    </div>
-                    {regRole === 'Admin' && (
-                        <div className="bg-amber-50 border border-amber-200 text-amber-700 p-3 rounded-xl text-sm">
-                          ⚠️ <strong>Προσοχή:</strong> Οι λογαριασμοί Admin χρειάζονται έγκριση.
-                        </div>
-                    )}
-                  </>
-              )}
-              <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1 ml-1">Username</label><input className="w-full p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-100" placeholder="Username" onChange={e => isRegistering ? setRegUsername(e.target.value) : setUsername(e.target.value)} required /></div>
-              <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1 ml-1">Κωδικός</label><input type="password" className="w-full p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-100" placeholder="********" onChange={e => isRegistering ? setRegPassword(e.target.value) : setPassword(e.target.value)} required /></div>
-              <button type="submit" className="w-full bg-blue-600 text-white font-bold p-4 rounded-xl hover:bg-blue-700 transition shadow-lg mt-2">{isRegistering ? 'Εγγραφή' : 'Είσοδος'}</button>
-            </form>
-            <div className="w-full mt-8 text-center text-slate-500 text-sm font-medium">
-              <p>{isRegistering ? 'Έχετε ήδη λογαριασμό;' : 'Δεν έχετε λογαριασμό;'} <button onClick={() => { setIsRegistering(!isRegistering); setUsername(''); setPassword(''); setRegFirstName(''); setRegLastName(''); setRegEmail(''); setRegUsername(''); setRegPassword(''); setRegRole(''); }} className="text-blue-600 font-bold hover:underline ml-1">{isRegistering ? 'Είσοδος' : 'Εγγραφή'}</button></p>
-            </div>
-          </div>
-        </div>
-    );
+    return <LoginForm onLogin={handleLogin} onRegister={handleRegister} />;
   }
 
   return (
@@ -637,712 +646,81 @@ function App() {
           </div>
         </header>
 
+        {/* ============= ΚΕΝΤΡΙΚΟ MENU (Γιατρός) ============= */}
         {currentView === 'dashboard' && (
             <div className="flex gap-4">
               <button onClick={() => setCurrentView('patients')} className="bg-blue-600 text-white px-8 py-4 rounded-2xl font-bold shadow-lg hover:bg-blue-700 transition">Διαχείριση Ασθενών</button>
             </div>
         )}
 
+        {/* ============= ΠΙΝΑΚΑΣ ΔΙΑΧΕΙΡΙΣΤΗ (Admin) ============= */}
         {currentView === 'admin-dashboard' && (
-            <div className="space-y-6 max-w-6xl mx-auto">
-
-
-              {/* Tabs Menu */}
-              <div className="flex gap-4 border-b border-slate-200 pb-4 mb-6">
-                <button onClick={() => setAdminTab('users')} className={`px-6 py-3 rounded-xl font-bold transition shadow-sm ${adminTab === 'users' ? 'bg-purple-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}`}>Χρήστες</button>
-                <button onClick={() => setAdminTab('patients')} className={`px-6 py-3 rounded-xl font-bold transition shadow-sm ${adminTab === 'patients' ? 'bg-purple-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}`}>Ασθενείς</button>
-                <button onClick={() => setAdminTab('cases')} className={`px-6 py-3 rounded-xl font-bold transition shadow-sm ${adminTab === 'cases' ? 'bg-purple-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}`}>Περιστατικά</button>
-              </div>
-
-              {/* Tab: Users */}
-
-              {/* Tab: Users */}
-              {adminTab === 'users' && (
-                  <div className="space-y-6">
-                    {/* Edit user form */}
-                    {editingUser && (
-                      <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
-                        <h2 className="text-2xl font-semibold mb-6">Επεξεργασία Χρήστη</h2>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          <input className="p-3 border rounded-xl" placeholder="Όνομα" value={editUserFirstName} onChange={e => setEditUserFirstName(e.target.value)} />
-                          <input className="p-3 border rounded-xl" placeholder="Επώνυμο" value={editUserLastName} onChange={e => setEditUserLastName(e.target.value)} />
-                          <input className="p-3 border rounded-xl" placeholder="Email" value={editUserEmail} onChange={e => setEditUserEmail(e.target.value)} />
-                          <input className="p-3 border rounded-xl" placeholder="Username" value={editUserUsername} onChange={e => setEditUserUsername(e.target.value)} />
-                          <select className="p-3 border rounded-xl bg-white w-full" value={editUserRole} onChange={e => setEditUserRole(e.target.value)}>
-                            <option value="" disabled>Επιλέξτε Ρόλο</option>
-                            <option value="Doctor">Doctor</option>
-                            <option value="Researcher">Researcher</option>
-                            <option value="Admin">Admin</option>
-                          </select>
-                        </div>
-                        <div className="flex gap-3 mt-6">
-                          <button onClick={handleUpdateUser} className="bg-green-600 text-white px-8 py-3 rounded-xl font-semibold hover:bg-green-700">Ενημέρωση</button>
-                          <button onClick={clearUserForm} className="bg-slate-200 text-slate-600 px-8 py-3 rounded-xl font-semibold hover:bg-slate-300">Ακύρωση</button>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Active Users */}
-                    <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
-                      <h3 className="text-xl font-bold mb-6 text-slate-700">Ενεργοί Χρήστες</h3>
-                      <ul className="grid gap-4">
-                        {allUsers.length > 0 ? allUsers.filter((u: any) => u.id !== doctorId && u.role !== 'Pending_Admin').map((u: any) => (
-                            <li key={u.id} className="bg-white p-6 rounded-2xl shadow-sm border flex justify-between items-center transition hover:shadow-md">
-                              <div>
-                                <span className="font-bold text-lg text-slate-800">{u.firstName} {u.lastName}</span>
-                                <p className="text-sm text-slate-500 mt-1">Ρόλος: {u.role} | Username: {u.username} | Email: {u.email}</p>
-                              </div>
-                              <div className="flex gap-3">
-                                <button onClick={() => startEditUser(u)} className="text-yellow-600 hover:underline">Επεξεργασία</button>
-                                <button onClick={() => handleDeleteUser(u.id)} className="text-red-500 hover:underline">Διαγραφή</button>
-                              </div>
-                            </li>
-                        )) : <p className="text-slate-500 font-medium">Δεν βρέθηκαν εγγεγραμμένοι χρήστες.</p>}
-                      </ul>
-                    </div>
-
-                    {/* Pending Approvals */}
-                    <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
-                      <h3 className="text-xl font-bold mb-6 text-slate-700">Εκκρεμείς Εγκρίσεις ({allPendingUsers.length})</h3>
-                      <ul className="space-y-4">
-                        {allPendingUsers.length > 0 ? allPendingUsers.map((u: any) => (
-                            <li key={u.id} className="p-5 border border-slate-100 bg-slate-50 rounded-2xl flex justify-between items-center">
-                              <div>
-                                <span className="font-bold text-lg block text-slate-800">{u.firstName} {u.lastName}</span>
-                                <span className="text-sm text-slate-500">@{u.username} • Ιδιότητα: Διαχειριστής (Αναμονή έγκρισης)</span>
-                              </div>
-                              <button onClick={() => handleApprove(u.id)} className="bg-green-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-green-700 shadow-sm transition">Έγκριση</button>
-                            </li>
-                        )) : <p className="text-slate-500 font-medium">Δεν υπάρχουν νέοι χρήστες προς έγκριση.</p>}
-                      </ul>
-                    </div>
-                  </div>
-              )}
-              {/* Tab: Patients */}
-              {adminTab === 'patients' && (
-                  <div className="space-y-6">
-                    {editingPatient && (
-                      <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
-                        <h2 className="text-2xl font-semibold mb-6">Επεξεργασία Ασθενή</h2>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          <input className="p-3 border rounded-xl" placeholder="Όνομα" value={pFirstName} onChange={e => setPFirstName(e.target.value)} />
-                          <input className="p-3 border rounded-xl" placeholder="Επώνυμο" value={pLastName} onChange={e => setPLastName(e.target.value)} />
-                          <input className="p-3 border rounded-xl" placeholder="ΑΜΚΑ (11 ψηφία)" value={patientAmka} onChange={e => setPatientAmka(e.target.value)} maxLength={11} />
-                          <input className="p-3 border rounded-xl" placeholder="Ηλικία" type="number" value={patientAge} onChange={e => setPatientAge(e.target.value)} />
-                          <select className="p-3 border rounded-xl bg-white w-full" value={patientGender || ''} onChange={e => setPatientGender(e.target.value)}>
-                            <option value="" disabled>Επιλέξτε Φύλο</option>
-                            <option value="Άνδρας">Άνδρας</option>
-                            <option value="Γυναίκα">Γυναίκα</option>
-                            <option value="Άλλο">Άλλο</option>
-                          </select>
-                          <input className="p-3 border rounded-xl" placeholder="Τηλέφωνο" value={patientTelephone} onChange={e => setPatientTelephone(e.target.value)} />
-                        </div>
-                        <div className="flex gap-3 mt-6">
-                          <button onClick={handleUpdatePatient} className="bg-green-600 text-white px-8 py-3 rounded-xl font-semibold hover:bg-green-700">Ενημέρωση</button>
-                          <button onClick={() => { setEditingPatient(null); clearPatientForm(); }} className="bg-slate-200 text-slate-600 px-8 py-3 rounded-xl font-semibold hover:bg-slate-300">Ακύρωση</button>
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
-                      <h3 className="text-xl font-bold mb-6 text-slate-700">Όλοι οι Ασθενείς</h3>
-                      <ul className="grid gap-4">
-                        {adminPatients.length > 0 ? adminPatients.map((p: any) => (
-                            <li key={p.patientId} className="bg-white p-6 rounded-2xl shadow-sm border flex justify-between items-center transition hover:shadow-md">
-                              <div>
-                                <span className="font-bold text-lg text-slate-800">{p.firstName} {p.lastName}</span>
-                                <p className="text-sm text-slate-500 mt-1">ΑΜΚΑ: {p.amka} | Ηλικία: {p.age} | Φύλο: {p.gender}</p>
-                              </div>
-                              <div className="flex gap-3">
-                                <button onClick={() => startEdit(p)} className="text-yellow-600 hover:underline">Επεξεργασία</button>
-                                <button onClick={() => handleDeletePatient(p.patientId)} className="text-red-500 hover:underline">Διαγραφή</button>
-                              </div>
-                            </li>
-                        )) : <p className="text-slate-500 font-medium">Δεν βρέθηκαν ασθενείς.</p>}
-                      </ul>
-                    </div>
-                  </div>
-              )}
-
-
-              {/* Tab: Cases */}
-              {adminTab === 'cases' && (() => {
-                const filteredCases = adminCases.filter((c: any) => {
-                  if (!filterTag && !amkaFilter) return true;
-                  if (filterTag) {
-                    const caseTags = c.tags ? c.tags.split(',').map((t: string) => t.trim()).filter((t: string) => t) : [];
-                    if (!caseTags.includes(filterTag)) return false;
-                  }
-                  if (amkaFilter) {
-                    const patientAmka = c.patient?.amka || '';
-                    if (!patientAmka.toLowerCase().includes(amkaFilter.toLowerCase())) return false;
-                  }
-                  return true;
-                });
-                return (
-                  <div className="space-y-6">
-                    <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
-                      <h3 className="text-xl font-bold mb-6 text-slate-700 flex justify-between items-center">
-                        Όλα τα Περιστατικά
-                        <span className="text-xs bg-slate-100 px-3 py-1 rounded-full text-slate-500 font-medium">{filteredCases.length} εγγραφές</span>
-                      </h3>
-
-                      {/* AMKA search */}
-                      <div className="mb-4">
-                        <input type="text" placeholder="Αναζήτηση με ΑΜΚΑ..."
-                          value={amkaFilter} onChange={e => setAmkaFilter(e.target.value)}
-                          className="w-full p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-100 text-sm" />
-                      </div>
-
-                      {/* Tag filter */}
-                      <div className="flex flex-wrap gap-1.5 mb-6">
-                        <button onClick={() => setFilterTag('')}
-                          className={`px-3 py-1 rounded-xl text-[9px] font-bold transition-all border ${
-                            !filterTag ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-400'
-                          }`}>Όλα</button>
-                        {availableTags.map(tag => (
-                          <button key={tag} onClick={() => setFilterTag(tag === filterTag ? '' : tag)}
-                            className={`px-3 py-1 rounded-xl text-[9px] font-bold transition-all border ${
-                              filterTag === tag ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-500 border-slate-200 hover:border-blue-200 hover:text-blue-600'
-                            }`}>{tag}</button>
-                        ))}
-                      </div>
-
-                      <div className="grid gap-4">
-                        {filteredCases.length > 0 ? (
-                          filteredCases.map((c: any) => {
-                            let data: any = { diagnosis: "Προβολή...", confidence: "N/A" };
-                            try { const p = JSON.parse(c.diagnosis); data = { diagnosis: p.diagnosis, confidence: p.confidence }; }
-                            catch (e) { data = { diagnosis: c.diagnosis.split('\n')[0].replace("ΔΙΑΓΝΩΣΗ:", "").replace(/\*\*/g, '').trim(), confidence: "N/A" }; }
-
-                            const caseTags = c.tags ? c.tags.split(',').map((t: string) => t.trim()).filter((t: string) => t) : [];
-
-                            return (
-                              <div key={c.id}
-                                onClick={() => setSelectedCase(c)}
-                                className="group cursor-pointer bg-white border rounded-2xl p-5 hover:shadow-md hover:border-blue-200 transition-all duration-200 border-slate-100"
-                              >
-                                <div className="flex items-center gap-6 text-left">
-                                  {/* Date & Type */}
-                                  <div className="w-28 flex-shrink-0 text-left">
-                                    <p className="text-[11px] font-bold text-slate-400 mb-1">
-                                      {new Date(c.date).toLocaleDateString('el-GR')}
-                                    </p>
-                                    <span className="inline-block px-2 py-1 bg-blue-50 text-[9px] font-bold text-blue-600 rounded-md uppercase border border-blue-100/50 leading-none">
-                                      {c.type || "Γενική"}
-                                    </span>
-                                  </div>
-
-                                  {/* Diagnosis preview */}
-                                  <div className="flex-1 min-w-0 border-l border-slate-50 pl-6 text-left">
-                                    {c.patient && (
-                                      <p className="text-[10px] text-slate-500 font-semibold mb-1">
-                                        {c.patient.firstName} {c.patient.lastName} — ΑΜΚΑ: {c.patient.amka}
-                                      </p>
-                                    )}
-                                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tight mb-1 truncate">
-                                      {c.symptoms ? `ΕΡΩΤΗΣΗ: ${c.symptoms}` : "Χωρίς ερώτημα"}
-                                    </p>
-                                    <p className="text-sm font-bold text-slate-800 leading-snug line-clamp-1">
-                                      {data.diagnosis}
-                                    </p>
-                                    {caseTags.length > 0 && (
-                                      <div className="flex flex-wrap gap-1 mt-1.5">
-                                        {caseTags.map((tag: string) => (
-                                          <span key={tag} className="text-[8px] px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-500 font-medium">{tag}</span>
-                                        ))}
-                                      </div>
-                                    )}
-                                  </div>
-
-                                  {/* Score & delete */}
-                                  <div className="w-20 flex-shrink-0 flex flex-col items-end gap-1">
-                                    <div className="bg-slate-50/80 px-3 py-1.5 rounded-xl border border-slate-100 text-center w-full">
-                                      <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mb-0.5 text-center">Score</p>
-                                      <p className="text-[11px] font-black text-blue-600 truncate text-center">{data.confidence}</p>
-                                    </div>
-                                    <button onClick={(e) => { e.stopPropagation(); handleDeleteCase(c.id); }}
-                                      className="text-[10px] font-bold text-rose-500 hover:text-rose-700 transition-all">Διαγραφή</button>
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })
-                        ) : (
-                          <div className="text-center py-12 bg-slate-50/50 rounded-3xl border-2 border-dashed border-slate-200">
-                            <p className="text-slate-400 text-sm font-medium">Δεν βρέθηκαν περιστατικά.</p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })()}
-            </div>
+          <AdminPanel
+            adminTab={adminTab} setAdminTab={setAdminTab}
+            allUsers={allUsers} allPendingUsers={allPendingUsers}
+            adminPatients={adminPatients} adminCases={adminCases}
+            doctorId={doctorId}
+            filterTag={filterTag} setFilterTag={setFilterTag}
+            amkaFilter={amkaFilter} setAmkaFilter={setAmkaFilter}
+            setSelectedCase={setSelectedCase}
+            availableTags={availableTags}
+            editingUser={editingUser}
+            editUserFirstName={editUserFirstName} setEditUserFirstName={setEditUserFirstName}
+            editUserLastName={editUserLastName} setEditUserLastName={setEditUserLastName}
+            editUserEmail={editUserEmail} setEditUserEmail={setEditUserEmail}
+            editUserUsername={editUserUsername} setEditUserUsername={setEditUserUsername}
+            editUserRole={editUserRole} setEditUserRole={setEditUserRole}
+            editingPatient={editingPatient} setEditingPatient={setEditingPatient}
+            pFirstName={pFirstName} setPFirstName={setPFirstName}
+            pLastName={pLastName} setPLastName={setPLastName}
+            patientAmka={patientAmka} setPatientAmka={setPatientAmka}
+            patientAge={patientAge} setPatientAge={setPatientAge}
+            patientGender={patientGender} setPatientGender={setPatientGender}
+            patientTelephone={patientTelephone} setPatientTelephone={setPatientTelephone}
+            onApprove={handleApprove}
+            onDeleteUser={handleDeleteUser}
+            onUpdateUser={handleUpdateUser}
+            startEditUser={startEditUser}
+            clearUserForm={clearUserForm}
+            onUpdatePatient={handleUpdatePatient}
+            onDeletePatient={handleDeletePatient}
+            startEdit={startEdit}
+            clearPatientForm={clearPatientForm}
+            onDeleteCase={handleDeleteCase}
+          />
         )}
 
-
+        {/* ============= ΚΑΡΤΕΛΑ ΑΣΘΕΝΗ (Γιατρός) ============= */}
         {currentView === 'patient-details' && (
-            <div className="grid md:grid-cols-2 gap-8 font-sans p-6">
-              {selectedPatient ? (
-                  <>
-                    {/* ΑΡΙΣΤΕΡΗ ΣΤΗΛΗ: ΠΡΟΦΙΛ & ΙΣΤΟΡΙΚΟ */}
-                    <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 flex flex-col h-fit">
-                      <button
-                          onClick={() => setCurrentView('patients')}
-                          className="text-slate-400 hover:text-slate-800 mb-6 font-bold flex items-center gap-2 transition"
-                      >
-                        ← Επιστροφή στους ασθενείς
-                      </button>
-
-                      <div className="mb-8">
-                        <h3 className="text-3xl font-bold text-slate-800 mb-1">
-                          {selectedPatient.firstName} {selectedPatient.lastName}
-                        </h3>
-                        <p className="text-slate-500 font-medium">
-                          AMKA: {selectedPatient.amka} | {selectedPatient.age} ετών | {selectedPatient.gender}
-                        </p>
-                      </div>
-
-                      <h4 className="font-bold text-lg mb-4 text-slate-700 flex justify-between items-center border-t pt-6">
-                        Ιστορικό Περιστατικών
-                        <span className="text-xs bg-slate-100 px-3 py-1 rounded-full text-slate-500 font-medium">
-              {medicalCases.length} εγγραφές
-            </span>
-                      </h4>
-
-                      {/* Tag filter */}
-                      <div className="flex flex-wrap gap-1.5 mb-4">
-                        <button
-                          onClick={() => setFilterTag('')}
-                          className={`px-3 py-1 rounded-xl text-[9px] font-bold transition-all border ${
-                            !filterTag ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-400'
-                          }`}
-                        >
-                          Όλα
-                        </button>
-                        {availableTags.map(tag => (
-                          <button
-                            key={tag}
-                            onClick={() => setFilterTag(tag === filterTag ? '' : tag)}
-                            className={`px-3 py-1 rounded-xl text-[9px] font-bold transition-all border ${
-                              filterTag === tag ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-500 border-slate-200 hover:border-blue-200 hover:text-blue-600'
-                            }`}
-                          >
-                            {tag}
-                          </button>
-                        ))}
-                      </div>
-
-                      <div className="space-y-3 max-h-[440px] overflow-y-auto pr-2 custom-scrollbar">
-                        {medicalCases.length > 0 ? (
-                            medicalCases.filter((m: any) => {
-                              if (!filterTag) return true;
-                              const caseTags = m.tags ? m.tags.split(',').map((t: string) => t.trim()).filter((t: string) => t) : [];
-                              return caseTags.includes(filterTag);
-                            }).map((m: any) => {
-                              // --- ΑΥΤΟ ΕΙΝΑΙ ΤΟ LOGIC ΠΟΥ ΞΕΡΟΥΜΕ ΟΤΙ ΛΕΙΤΟΥΡΓΕΙ ---
-                              let data: any = { diagnosis: "Προβολή...", confidence: "N/A" };
-                              try {
-                                // Αν το νέο περιστατικό είναι JSON, το διαβάζουμε σωστά
-                                const parsed = JSON.parse(m.diagnosis);
-                                data = {
-                                  diagnosis: parsed.diagnosis,
-                                  confidence: parsed.confidence
-                                };
-                              } catch (e) {
-                                // Fallback για τα παλιά περιστατικά που ήταν απλό κείμενο
-                                data = {
-                                  diagnosis: m.diagnosis.split('\n')[0].replace("ΔΙΑΓΝΩΣΗ:", "").replace(/\*\*/g, '').trim(),
-                                  confidence: "N/A"
-                                };
-                              }
-
-                              return (
-                                  <div
-                                      key={m.id}
-                                      onClick={() => loadCaseIntoAI(m)}
-                                      className={`group cursor-pointer bg-white border rounded-2xl p-5 hover:shadow-md hover:border-blue-200 transition-all duration-200 ${
-                                        currentCaseId === m.id ? 'border-blue-300 ring-1 ring-blue-200' : 'border-slate-100'
-                                      }`}
-                                  >
-                                    <div className="flex items-center gap-6 text-left">
-                                      {/* Στήλη 1: Ημερομηνία */}
-                                      <div className="w-28 flex-shrink-0 text-left">
-                                        <p className="text-[11px] font-bold text-slate-400 mb-1">
-                                          {new Date(m.date).toLocaleDateString('el-GR')}
-                                        </p>
-                                        <span className="inline-block px-2 py-1 bg-blue-50 text-[9px] font-bold text-blue-600 rounded-md uppercase border border-blue-100/50 leading-none">
-                        {m.type || "Γενική"}
-                    </span>
-                                      </div>
-
-                                      {/* Στήλη 2: Διάγνωση (Προεπισκόπηση) */}
-                                      <div className="flex-1 min-w-0 border-l border-slate-50 pl-6 text-left">
-                                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tight mb-1 truncate">
-                                          ΕΡΩΤΗΣΗ: {m.symptoms}
-                                        </p>
-                                        <p className="text-sm font-bold text-slate-800 leading-snug line-clamp-1">
-                                          {data.diagnosis}
-                                        </p>
-                                        {(() => {
-                                          const caseTags = m.tags ? m.tags.split(',').map((t: string) => t.trim()).filter((t: string) => t) : [];
-                                          return caseTags.length > 0 ? (
-                                            <div className="flex flex-wrap gap-1 mt-1.5">
-                                              {caseTags.map((tag: string) => (
-                                                <span key={tag} className="text-[8px] px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-500 font-medium">
-                                                  {tag}
-                                                </span>
-                                              ))}
-                                            </div>
-                                          ) : null;
-                                        })()}
-                                      </div>
-
-                                      {/* Στήλη 3: Score + indicator */}
-                                      <div className="w-20 flex-shrink-0 flex flex-col items-end gap-1">
-                                        <div className="bg-slate-50/80 px-3 py-1.5 rounded-xl border border-slate-100 text-center w-full">
-                                          <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mb-0.5 text-center">Score</p>
-                                          <p className="text-[11px] font-black text-blue-600 truncate text-center">
-                                            {data.confidence}
-                                          </p>
-                                        </div>
-                                        {currentCaseId === m.id && (
-                                          <span className="text-[9px] font-bold text-emerald-600">Ενεργό</span>
-                                        )}
-                                        <button
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              handleDeleteCase(m.id);
-                                            }}
-                                            className="opacity-0 group-hover:opacity-100 text-[10px] font-bold text-rose-500 hover:text-rose-700 transition-all"
-                                        >
-                                          Διαγραφή
-                                        </button>
-                                      </div>
-                                    </div>
-                                  </div>
-                              );
-                            })
-                        ) : (
-                            <div className="text-center py-12 bg-slate-50/50 rounded-3xl border-2 border-dashed border-slate-200">
-                              <p className="text-slate-400 text-sm font-medium">Δεν υπάρχει ιστορικό εγγραφών.</p>
-                            </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* ΔΕΞΙΑ ΣΤΗΛΗ: AI ASSISTANT */}
-                    <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 flex flex-col h-fit">
-                      {/* Header with status */}
-                      <div className="flex justify-between items-center mb-6">
-                        <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">AI Medical Assistant</h3>
-                        {currentCaseId && (
-                          <button onClick={startNewAnalysis} className="text-[10px] font-bold text-slate-400 hover:text-blue-600 transition">
-                            ✕ Νέα Ανάλυση
-                          </button>
-                        )}
-                      </div>
-
-                      {/* Active case indicator */}
-                      {currentCaseId && (
-                        <div className="text-[10px] text-emerald-600 font-bold mb-3 bg-emerald-50 px-4 py-2 rounded-xl border border-emerald-100">
-                          Σε εξέλιξη: Περιστατικό #{currentCaseId} — {conversation.length} ερώτηση{conversation.length !== 1 ? 'εις' : ''}
-                        </div>
-                      )}
-
-                      {/* Tag editor (only when a case is loaded) */}
-                      {currentCaseId && (
-                        <div className="mb-4 p-4 bg-slate-50/50 rounded-2xl border border-slate-100 space-y-2">
-                          <div className="flex justify-between items-center">
-                            <p className="text-[9px] font-bold text-slate-400 uppercase">Ετικέτες</p>
-                            <button
-                              onClick={handleSaveTags}
-                              className="text-[9px] font-bold text-blue-600 hover:text-blue-800 transition"
-                            >
-                              ✓ Αποθήκευση
-                            </button>
-                          </div>
-                          {/* Selected tags (all tags with × to remove) */}
-                          {selectedTags.length > 0 && (
-                            <div className="flex flex-wrap gap-1">
-                              {selectedTags.map(tag => (
-                                <span key={tag} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[9px] font-bold bg-blue-600 text-white border border-blue-600">
-                                  {tag}
-                                  <button
-                                    onClick={() => setSelectedTags(prev => prev.filter(t => t !== tag))}
-                                    className="text-white/70 hover:text-white leading-none"
-                                  >×</button>
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                          {/* Unselected predefined tags (click to add) */}
-                          {availableTags.filter(t => !selectedTags.includes(t)).length > 0 && (
-                            <div className="flex flex-wrap gap-1">
-                              {availableTags.filter(t => !selectedTags.includes(t)).map(tag => (
-                                <div key={tag} className="inline-flex items-center gap-0.5">
-                                  {editingTag === tag ? (
-                                    <input
-                                      value={editTagValue}
-                                      onChange={e => setEditTagValue(e.target.value)}
-                                      onBlur={() => handleRenameTag(tag)}
-                                      onKeyDown={e => {
-                                        if (e.key === 'Enter') { e.preventDefault(); handleRenameTag(tag); }
-                                        if (e.key === 'Escape') setEditingTag(null);
-                                      }}
-                                      className="w-20 px-1 py-0.5 text-[9px] border border-blue-300 rounded outline-none focus:ring-1 focus:ring-blue-200"
-                                      autoFocus
-                                    />
-                                  ) : (
-                                    <>
-                                      <button
-                                        onClick={() => setSelectedTags(prev => [...prev, tag])}
-                                        className="px-2 py-1 rounded-lg text-[9px] font-bold border bg-white text-slate-500 border-slate-200 hover:border-blue-200 hover:text-blue-600 transition-all"
-                                      >
-                                        + {tag}
-                                      </button>
-                                      <button
-                                        onClick={() => { setEditingTag(tag); setEditTagValue(tag); }}
-                                        className="text-[9px] text-slate-300 hover:text-blue-500 transition-colors"
-                                        title="Μετονομασία"
-                                      >✎</button>
-                                      <button
-                                        onClick={() => handleDeleteTag(tag)}
-                                        className="text-[9px] text-slate-300 hover:text-red-500 transition-colors"
-                                        title="Διαγραφή"
-                                      >✕</button>
-                                    </>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                          {/* Add custom tag */}
-                          <div className="flex gap-1.5">
-                            <input
-                              value={customTagInput}
-                              onChange={e => setCustomTagInput(e.target.value)}
-                              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddCustomTag(); } }}
-                              className="flex-1 min-w-0 px-2.5 py-1.5 border border-slate-200 rounded-lg text-[10px] outline-none focus:ring-1 focus:ring-blue-200 bg-white"
-                              placeholder="Νέα ετικέτα..."
-                            />
-                            <button
-                              onClick={handleAddCustomTag}
-                              className="px-2.5 py-1.5 bg-slate-200 hover:bg-slate-300 rounded-lg text-[10px] font-bold text-slate-600 transition"
-                            >
-                              +
-                            </button>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* CONVERSATION HISTORY */}
-                      {conversation.length > 0 && (
-                        <div className="mb-6 max-h-[420px] overflow-y-auto space-y-4 pr-1 custom-scrollbar border border-slate-100 rounded-2xl p-3 bg-slate-50/30">
-                          {conversation.map((entry: any, idx: number) => (
-                            <div key={idx} className="space-y-2">
-                              {/* Question bubble */}
-                              <div className="flex justify-end">
-                                <div className="bg-blue-50 p-3 rounded-2xl rounded-br-md max-w-[92%] border border-blue-100">
-                                  <p className="text-[9px] font-bold text-blue-500 uppercase mb-1">Ερ. {idx + 1} • {entry.type}</p>
-                                  <p className="text-xs text-slate-700">{entry.question}</p>
-                                </div>
-                              </div>
-                              {/* Full Answer Card */}
-                              {(() => {
-                                let d: any = { diagnosis: entry.answer };
-                                try { d = JSON.parse(entry.answer); } catch (e) {}
-                                return (
-                                  <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                                    {/* Diagnosis header */}
-                                    <div className="p-4 border-b border-slate-50">
-                                      <div className="flex justify-between items-start">
-                                        <div className="flex-1 min-w-0">
-                                          <p className="text-[9px] font-black text-blue-500 uppercase tracking-widest mb-0.5">Διάγνωση</p>
-                                          <h4 className="text-sm font-bold text-slate-800">{d.diagnosis}</h4>
-                                        </div>
-                                        <div className="text-right ml-2 shrink-0">
-                                          <p className="text-[8px] font-bold text-slate-400 uppercase">Score</p>
-                                          <span className="text-sm font-black text-blue-600">{d.confidence}</span>
-                                        </div>
-                                      </div>
-                                      {d.analysis && (
-                                        <p className="text-[11px] text-slate-500 italic mt-2 leading-relaxed">{d.analysis}</p>
-                                      )}
-                                    </div>
-                                    {/* Recommendations & Red Flags */}
-                                    {(d.recommendations?.length > 0 || d.red_flags?.length > 0) && (
-                                      <div className="grid grid-cols-2 gap-px bg-slate-100">
-                                        {d.recommendations?.length > 0 && (
-                                          <div className="bg-emerald-50/60 p-3">
-                                            <h5 className="text-[9px] font-bold text-emerald-700 uppercase mb-2">📋 Προτάσεις</h5>
-                                            <ul className="space-y-1">
-                                              {d.recommendations.map((rec: string, ri: number) => (
-                                                <li key={ri} className="flex items-start gap-1.5 text-[10px] text-emerald-900/80">
-                                                  <span className="mt-0.5 w-1 h-1 rounded-full bg-emerald-400 shrink-0"></span>
-                                                  {rec}
-                                                </li>
-                                              ))}
-                                            </ul>
-                                          </div>
-                                        )}
-                                        {d.red_flags?.length > 0 && (
-                                          <div className="bg-rose-50/60 p-3">
-                                            <h5 className="text-[9px] font-bold text-rose-700 uppercase mb-2">⚠️ Red Flags</h5>
-                                            <ul className="space-y-1">
-                                              {d.red_flags.map((flag: string, fi: number) => (
-                                                <li key={fi} className="flex items-start gap-1.5 text-[10px] text-rose-900/80">
-                                                  <span className="mt-0.5 w-1 h-1 rounded-full bg-rose-400 shrink-0"></span>
-                                                  {flag}
-                                                </li>
-                                              ))}
-                                            </ul>
-                                          </div>
-                                        )}
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              })()}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      {/* Input area */}
-                      <div className="space-y-4">
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-bold text-slate-400 uppercase ml-2">Τύπος Ανάλυσης</label>
-                          <select
-                            className="w-full p-4 border border-slate-200 rounded-2xl bg-slate-50 focus:ring-2 focus:ring-blue-100 outline-none transition"
-                            value={aiQueryType}
-                            onChange={(e) => setAiQueryType(e.target.value)}
-                          >
-                            <option>Γενική Ερώτηση</option>
-                            <option>Ανάλυση Συμπτωμάτων</option>
-                            <option>Πρόγνωση Παθήσεων</option>
-                            <option>Προτάσεις Θεραπείας</option>
-                          </select>
-                        </div>
-
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-bold text-slate-400 uppercase ml-2">Περιγραφή</label>
-                          <textarea
-                            className="w-full p-4 border border-slate-200 rounded-2xl h-32 focus:ring-2 focus:ring-blue-100 outline-none transition bg-slate-50"
-                            placeholder={`Περιγράψτε εδώ τα συμπτώματα για ${aiQueryType}...`}
-                            value={aiQuery}
-                            onChange={e => setAiQuery(e.target.value)}
-                          />
-                        </div>
-
-                        <button
-                          onClick={handleAskAI}
-                          className="w-full bg-blue-600 text-white py-4 rounded-2xl font-bold hover:bg-blue-700 transition shadow-lg shadow-blue-100"
-                        >
-                          Έναρξη Ανάλυσης
-                        </button>
-                      </div>
-
-                      {/* CURRENT AI RESULT (pending save) */}
-                      {pendingDiagnosis && (
-                        <div className="mt-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                          {typeof pendingDiagnosis === 'object' ? (
-                            <div className="space-y-6">
-                              {/* Diagnosis Card */}
-                              <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 relative overflow-hidden">
-                                <div className="absolute top-0 left-0 w-1.5 h-full bg-blue-500"></div>
-                                <div className="flex justify-between items-start mb-4">
-                                  <div>
-                                    <p className="text-[9px] font-black text-blue-500 uppercase tracking-widest mb-1">Νέο Αποτέλεσμα AI</p>
-                                    <h3 className="text-xl font-bold text-slate-800">{pendingDiagnosis.diagnosis}</h3>
-                                  </div>
-                                  <div className="text-right">
-                                    <p className="text-[9px] font-bold text-slate-400 uppercase">Confidence</p>
-                                    <span className="text-lg font-black text-blue-600">{pendingDiagnosis.confidence}</span>
-                                  </div>
-                                </div>
-                                <p className="text-slate-600 text-xs leading-relaxed italic border-t border-slate-50 pt-4">
-                                  {pendingDiagnosis.analysis}
-                                </p>
-                              </div>
-
-                              <div className="grid grid-cols-2 gap-4">
-                                <div className="bg-emerald-50 rounded-2xl p-4 border border-emerald-100">
-                                  <h4 className="text-[10px] font-bold text-emerald-700 mb-3 uppercase tracking-wider">📋 Προτάσεις</h4>
-                                  <ul className="space-y-2">
-                                    {pendingDiagnosis.recommendations?.map((rec: string, i: number) => (
-                                      <li key={i} className="flex items-start gap-2 text-[10px] text-emerald-900/80">
-                                        <span className="mt-1 w-1 h-1 rounded-full bg-emerald-400 shrink-0"></span>
-                                        {rec}
-                                      </li>
-                                    ))}
-                                  </ul>
-                                </div>
-
-                                <div className="bg-rose-50 rounded-2xl p-4 border border-rose-100">
-                                  <h4 className="text-[10px] font-bold text-rose-700 mb-3 uppercase tracking-wider">⚠️ Red Flags</h4>
-                                  <ul className="space-y-2">
-                                    {pendingDiagnosis.red_flags?.map((flag: string, i: number) => (
-                                      <li key={i} className="flex items-start gap-2 text-[10px] text-rose-900/80">
-                                        <span className="mt-1 w-1 h-1 rounded-full bg-rose-400 shrink-0"></span>
-                                        {flag}
-                                      </li>
-                                    ))}
-                                  </ul>
-                                </div>
-                              </div>
-
-                              {/* Tag selector */}
-                              <div className="space-y-2">
-                                <p className="text-[10px] font-bold text-slate-400 uppercase ml-1">Ετικέτες</p>
-                                <div className="flex flex-wrap gap-1.5">
-                                  {availableTags.map(tag => (
-                                    <button
-                                      key={tag}
-                                      onClick={() => setSelectedTags(prev =>
-                                        prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
-                                      )}
-                                      className={`px-3 py-1.5 rounded-xl text-[10px] font-bold transition-all border ${
-                                        selectedTags.includes(tag)
-                                          ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
-                                          : 'bg-white text-slate-500 border-slate-200 hover:border-blue-200 hover:text-blue-600'
-                                      }`}
-                                    >
-                                      {tag}
-                                    </button>
-                                  ))}
-                                </div>
-                              </div>
-
-                              <button
-                                onClick={handleSaveCase}
-                                className="w-full bg-slate-800 text-white py-4 rounded-2xl font-bold hover:bg-slate-900 transition shadow-xl flex items-center justify-center gap-2"
-                              >
-                                ✓ {currentCaseId ? 'Προσθήκη στο Περιστατικό' : 'Επιβεβαίωση & Αποθήκευση'}
-                              </button>
-                            </div>
-                          ) : (
-                            <div className="flex items-center justify-center p-12 bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200">
-                              <div className="text-center">
-                                <div className="animate-spin h-6 w-6 border-3 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
-                                <p className="text-slate-500 text-xs font-medium">{pendingDiagnosis}</p>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </>
-              ) : (
-                  <div className="col-span-2 text-center p-20 bg-white rounded-3xl border border-slate-100">
-                    <p className="text-lg font-bold text-slate-500 italic">Επιλέξτε έναν ασθενή για να δείτε το ιστορικό του...</p>
-                    <button onClick={() => setCurrentView('patients')} className="mt-4 text-blue-600 font-bold hover:underline">Επιστροφή στη λίστα</button>
-                  </div>
-              )}
-            </div>
+          <PatientDetailsView
+            selectedPatient={selectedPatient}
+            currentView={currentView} setCurrentView={setCurrentView}
+            medicalCases={medicalCases}
+            filterTag={filterTag} setFilterTag={setFilterTag}
+            conversation={conversation}
+            currentCaseId={currentCaseId}
+            aiQuery={aiQuery} setAiQuery={setAiQuery}
+            aiQueryType={aiQueryType} setAiQueryType={setAiQueryType}
+            pendingDiagnosis={pendingDiagnosis}
+            selectedTags={selectedTags} setSelectedTags={setSelectedTags}
+            availableTags={availableTags}
+            customTagInput={customTagInput} setCustomTagInput={setCustomTagInput}
+            editingTag={editingTag} setEditingTag={setEditingTag}
+            editTagValue={editTagValue} setEditTagValue={setEditTagValue}
+            onAskAI={handleAskAI}
+            onSaveCase={handleSaveCase}
+            onDeleteCase={handleDeleteCase}
+            onLoadCase={loadCaseIntoAI}
+            onNewAnalysis={startNewAnalysis}
+            onSaveTags={handleSaveTags}
+            onAddCustomTag={handleAddCustomTag}
+            onRenameTag={handleRenameTag}
+            onDeleteTag={handleDeleteTag}
+            casesLoading={casesLoading}
+          />
         )}
 
+        {/* ============= ΛΙΣΤΑ ΑΣΘΕΝΩΝ (Γιατρός) ============= */}
         {currentView === 'patients' && (
             <div className="space-y-6">
               <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
@@ -1366,13 +744,14 @@ function App() {
 
                   <input className="p-3 border rounded-xl" placeholder="Τηλέφωνο" value={patientTelephone} onChange={e => setPatientTelephone(e.target.value)} />
                 </div>
-                <button onClick={editingPatient ? handleUpdatePatient : handleAddPatient} className="mt-6 bg-green-600 text-white px-8 py-3 rounded-xl font-semibold hover:bg-green-700">
+                <button onClick={editingPatient ? handleUpdatePatient : handleAddPatient} disabled={actionLoading}
+                  className="mt-6 bg-green-600 text-white px-8 py-3 rounded-xl font-semibold hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed">
                   {editingPatient ? 'Ενημέρωση' : 'Αποθήκευση'}
                 </button>
               </div>
 
               <ul className="grid gap-4">
-                {patients.map((p: any) => (
+                {patientsLoading ? <Spinner /> : patients.length > 0 ? patients.map((p: any) => (
                     <li key={p.patientId} className="bg-white p-6 rounded-2xl shadow-sm border flex justify-between items-center transition hover:shadow-md">
                       <span className="font-medium text-lg">{p.firstName} {p.lastName}</span>
                       <div className="flex gap-3">
@@ -1385,148 +764,19 @@ function App() {
                         <button onClick={() => handleDeletePatient(p.patientId)} className="text-red-500 hover:underline">Διαγραφή</button>
                       </div>
                     </li>
-                ))}
+                )) : <p className="text-slate-500 font-medium">Δεν βρέθηκαν ασθενείς.</p>}
               </ul>
 
             </div>
         )}
-        {/* MODAL ΓΙΑ ΠΡΟΒΟΛΗ ΠΛΗΡΟΥΣ ΠΕΡΙΣΤΑΤΙΚΟΥ */}
-        {selectedCase && (
-            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-300">
-              <div className="bg-slate-50 w-full max-w-3xl rounded-[40px] shadow-2xl overflow-hidden border border-white animate-in zoom-in-95 duration-200">
-
-                {/* Header */}
-                <div className="p-8 bg-white border-b border-slate-100 flex justify-between items-center text-left">
-                    <div className="text-left">
-                      <div className="flex items-center gap-2 mb-1">
-            <span className="px-2 py-0.5 bg-blue-50 text-[10px] font-bold text-blue-600 rounded-md uppercase border border-blue-100/50">
-              {selectedCase.type}
-            </span>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                        • {new Date(selectedCase.date).toLocaleString('el-GR')}
-                      </p>
-                    </div>
-                    <h3 className="text-2xl font-bold text-slate-800 text-left">Λεπτομέρειες Εγγραφής</h3>
-                    {selectedCase.patient && (
-                      <p className="text-xs font-semibold text-slate-500 mt-1 text-left">
-                        {selectedCase.patient.firstName} {selectedCase.patient.lastName} — ΑΜΚΑ: {selectedCase.patient.amka}
-                      </p>
-                    )}
-                  </div>
-                  <button onClick={() => setSelectedCase(null)} className="w-12 h-12 flex items-center justify-center rounded-full bg-slate-50 text-slate-400 hover:text-rose-500 transition-all">✕</button>
-                </div>
-
-                <div className="p-8 max-h-[75vh] overflow-y-auto space-y-6 custom-scrollbar text-left">
-                  {/* Tags */}
-                  {(() => {
-                    const modalTags = selectedCase.tags ? selectedCase.tags.split(',').map((t: string) => t.trim()).filter((t: string) => t) : [];
-                    return modalTags.length > 0 ? (
-                      <div className="flex flex-wrap gap-1.5">
-                        {modalTags.map((tag: string) => (
-                          <span key={tag} className="px-2.5 py-1 rounded-xl text-[10px] font-bold bg-blue-50 text-blue-600 border border-blue-100">
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-                    ) : null;
-                  })()}
-                  {/* CONVERSATION HISTORY (chat style) */}
-                  {(() => {
-                    let convEntries: any[] = [];
-                    try {
-                      if (selectedCase.conversation) {
-                        const parsed = JSON.parse(selectedCase.conversation);
-                        if (Array.isArray(parsed) && parsed.length > 0) convEntries = parsed;
-                      }
-                    } catch (e) {}
-                    if (convEntries.length === 0) {
-                      convEntries = [{ question: selectedCase.symptoms, answer: selectedCase.diagnosis, type: selectedCase.type }];
-                    }
-                    return (
-                      <div className="space-y-4">
-                        {convEntries.length > 1 && (
-                          <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-left">Ιστορικό Συνομιλίας</h4>
-                        )}
-                        {convEntries.map((entry: any, idx: number) => (
-                          <div key={idx} className="space-y-2">
-                            <div className="flex justify-end">
-                              <div className="bg-blue-50 p-3 rounded-2xl rounded-br-md max-w-[92%] border border-blue-100">
-                                <p className="text-[9px] font-bold text-blue-500 uppercase mb-1">Ερ. {idx + 1} • {entry.type}</p>
-                                <p className="text-xs text-slate-700">{entry.question}</p>
-                              </div>
-                            </div>
-                            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                              {(() => {
-                                let d: any = { diagnosis: entry.answer };
-                                try { d = JSON.parse(entry.answer); } catch (e) { d = { diagnosis: entry.answer }; }
-                                return (
-                                  <div className="text-left">
-                                    <div className="p-4 border-b border-slate-50">
-                                      <div className="flex justify-between items-start">
-                                        <div className="flex-1 min-w-0">
-                                          <p className="text-[9px] font-black text-blue-500 uppercase tracking-widest mb-0.5">Διάγνωση</p>
-                                          <h4 className="text-sm font-bold text-slate-800">{d.diagnosis}</h4>
-                                        </div>
-                                        {d.confidence && (
-                                          <div className="text-right ml-2 shrink-0">
-                                            <p className="text-[8px] font-bold text-slate-400 uppercase">Score</p>
-                                            <span className="text-sm font-black text-blue-600">{d.confidence}</span>
-                                          </div>
-                                        )}
-                                      </div>
-                                      {d.analysis && (
-                                        <p className="text-[11px] text-slate-500 italic mt-2 leading-relaxed">{d.analysis}</p>
-                                      )}
-                                    </div>
-                                    {(d.recommendations?.length > 0 || d.red_flags?.length > 0) && (
-                                      <div className="grid grid-cols-2 gap-px bg-slate-100">
-                                        {d.recommendations?.length > 0 && (
-                                          <div className="bg-emerald-50/60 p-3">
-                                            <h5 className="text-[9px] font-bold text-emerald-700 uppercase mb-2">📋 Προτάσεις</h5>
-                                            <ul className="space-y-1">
-                                              {d.recommendations.map((rec: string, ri: number) => (
-                                                <li key={ri} className="flex items-start gap-1.5 text-[10px] text-emerald-900/80">
-                                                  <span className="mt-0.5 w-1 h-1 rounded-full bg-emerald-400 shrink-0"></span>
-                                                  {rec}
-                                                </li>
-                                              ))}
-                                            </ul>
-                                          </div>
-                                        )}
-                                        {d.red_flags?.length > 0 && (
-                                          <div className="bg-rose-50/60 p-3">
-                                            <h5 className="text-[9px] font-bold text-rose-700 uppercase mb-2">⚠️ Red Flags</h5>
-                                            <ul className="space-y-1">
-                                              {d.red_flags.map((flag: string, fi: number) => (
-                                                <li key={fi} className="flex items-start gap-1.5 text-[10px] text-rose-900/80">
-                                                  <span className="mt-0.5 w-1 h-1 rounded-full bg-rose-400 shrink-0"></span>
-                                                  {flag}
-                                                </li>
-                                              ))}
-                                            </ul>
-                                          </div>
-                                        )}
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              })()}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    );
-                  })()}
-                </div>
-
-                <div className="p-8 bg-white border-t text-right">
-                  <button onClick={() => setSelectedCase(null)} className="px-10 py-4 bg-slate-900 text-white rounded-2xl font-bold hover:bg-slate-800 transition-all shadow-lg active:scale-95">
-                    Κλείσιμο
-                  </button>
-                </div>
-              </div>
-            </div>
-        )}
+        <CaseModal
+          selectedCase={selectedCase}
+          onClose={() => setSelectedCase(null)}
+          onDelete={(id) => {
+            handleDeleteCase(id);
+            setSelectedCase(null);
+          }}
+        />
       </div>
   );
 }

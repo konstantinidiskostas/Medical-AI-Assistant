@@ -4,6 +4,8 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -15,8 +17,11 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 
 /**
- * Intercepts every incoming HTTP request to check for a valid JWT token
- * in the "Authorization" header.
+ * Φίλτρο που παρεμβάλλεται σε ΚΑΘΕ HTTP αίτημα και ελέγχει αν υπάρχει
+ * έγκυρο JWT token στην επικεφαλίδα "Authorization".
+ *
+ * Αν το token είναι έγκυρο, φορτώνει τον χρήστη και τον βάζει στο Spring Security Context
+ * (ώστε να είναι "συνδεδεμένος" για τα επόμενα βήματα).
  */
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
@@ -27,6 +32,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     @Autowired
     private CustomUserDetailsService userDetailsService;
 
+    /**
+     * Logger για καταγραφή σφαλμάτων (αντί για System.out.println).
+     */
+    private static final Logger logger = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
+
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
@@ -36,24 +46,25 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String username = null;
         String jwt = null;
 
-        // Check if the header exists and starts with "Bearer "
+        // Ελέγχουμε αν υπάρχει header "Authorization: Bearer <token>"
         if (authorizationHeader != null && authorizationHeader.startsWith("Bearer ")) {
-            jwt = authorizationHeader.substring(7); // Remove "Bearer " to get the actual token
+            jwt = authorizationHeader.substring(7);
+
             try {
                 username = jwtUtil.extractUsername(jwt);
             } catch (Exception e) {
-                System.out.println("Invalid or expired JWT Token");
+                // ΔΙΟΡΘΩΣΗ: Χρησιμοποιούμε logger αντί για System.out.println
+                logger.warn("Άκυρο ή ληγμένο JWT token: {}", e.getMessage());
             }
         }
 
-        // If a username was extracted and the user is not yet authenticated in this session
+        // Αν βρήκαμε username και δεν υπάρχει ήδη authentication στο context
         if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
 
             UserDetails userDetails = this.userDetailsService.loadUserByUsername(username);
 
-            // Validate the token
             if (jwtUtil.validateToken(jwt)) {
-                // Set the authentication in the Spring Security context
+                // Δημιουργούμε το authentication token και το βάζουμε στο context
                 UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
                         userDetails, null, userDetails.getAuthorities());
                 authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
@@ -62,7 +73,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             }
         }
 
-        // Continue with the request chain
+        // Συνεχίζουμε την αλυσίδα φίλτρων
         chain.doFilter(request, response);
     }
 }

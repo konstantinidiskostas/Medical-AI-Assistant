@@ -8,17 +8,18 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 
 /**
- * By extending JpaRepository, Spring Data JPA automatically provides
- * standard CRUD (Create, Read, Update, Delete) operations.
- * - MedicalCase: The domain type the repository manages.
- * - Long: The type of the id of the entity.
- * No boilerplate code is needed for basic database interactions.
+ * Repository για τον πίνακα 'medical_cases' (ιατρικά περιστατικά).
+ *
+ * Το Spring Data JPA παρέχει αυτόματα όλες τις βασικές CRUD λειτουργίες.
+ * Εδώ ορίζουμε την αναζήτηση περιστατικών ανά ασθενή,
+ * ταξινομημένων κατά ημερομηνία (πιο πρόσφατο πρώτο).
  */
 @Repository
 public interface MedicalCaseRepository extends JpaRepository<MedicalCase, Long> {
+
     /**
-     * Retrieves all medical cases associated with a specific patient.
-     * We order them by creation date descending so the most recent visits appear first.
+     * Βρίσκει όλα τα περιστατικά ενός ασθενή, ταξινομημένα από το πιο πρόσφατο
+     * στο πιο παλιό. Χρήσιμο για την προβολή ιστορικού.
      */
     List<MedicalCase> findByPatientOrderByDateDesc(Patient patient);
 }
