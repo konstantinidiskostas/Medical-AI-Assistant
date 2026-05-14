@@ -1,32 +1,38 @@
 package com.medical.ai.dtos;
 
 /**
- * Data Transfer Object (DTO) for Patient creation requests.
- * * WHY WE USE THIS:
- * Instead of exposing our Database Entity directly to the API, we use this class
- * as a 'contract'. It defines exactly what the frontend must send to create a patient.
- * It shields our database structure from the frontend and adds a layer of security.
+ * DTO για αιτήματα δημιουργίας/ενημέρωσης ασθενή.
+ *
+ * ΔΙΟΡΘΩΣΗ: Τα πεδία έγιναν private (ήταν public, που σπάει την encapsulation).
+ * Τώρα έχουμε getters/setters όπως σε όλα τα σωστά DTOs.
  */
 public class PatientRequest {
 
-    // The name of the patient as entered by the doctor
-    public String firstName;
-    public String lastName;
+    private String firstName;
+    private String lastName;
+    private String amka;
+    private int age;
+    private String gender;
+    private String telephone;
+    private Long doctorId;
 
-    // The patient's Social Security Number (AMKA), used as a unique identifier
-    public String amka;
+    // --- Getters ---
 
-    // Patient's age (numeric value)
-    public int age;
+    public String getFirstName() { return firstName; }
+    public String getLastName() { return lastName; }
+    public String getAmka() { return amka; }
+    public int getAge() { return age; }
+    public String getGender() { return gender; }
+    public String getTelephone() { return telephone; }
+    public Long getDoctorId() { return doctorId; }
 
-    // Gender information (e.g., Male, Female, Other)
-    public String gender;
+    // --- Setters ---
 
-    // Contact telephone number for the patient
-    public String telephone;
-
-    // The ID of the doctor who is currently logged in.
-    // We send this from the frontend so the backend knows which Doctor
-    // is the "owner" of this new Patient record.
-    public Long doctorId;
+    public void setFirstName(String firstName) { this.firstName = firstName; }
+    public void setLastName(String lastName) { this.lastName = lastName; }
+    public void setAmka(String amka) { this.amka = amka; }
+    public void setAge(int age) { this.age = age; }
+    public void setGender(String gender) { this.gender = gender; }
+    public void setTelephone(String telephone) { this.telephone = telephone; }
+    public void setDoctorId(Long doctorId) { this.doctorId = doctorId; }
 }

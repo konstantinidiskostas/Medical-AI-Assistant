@@ -3,65 +3,117 @@ package com.medical.ai.services;
 import com.medical.ai.entities.MedicalCase;
 import com.medical.ai.entities.Patient;
 import com.medical.ai.repositories.MedicalCaseRepository;
+import org.json.JSONArray;
+import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 /**
- * Η κλάση MedicalCaseService λειτουργεί ως το Service Layer
- * για τη διαχείριση των ιατρικών περιστατικών. Αναλαμβάνει την αποθήκευση,
- * ανάκτηση και μελλοντική επεξεργασία των περιστατικών μέσω Τεχνητής Νοημοσύνης.
+ * Υπηρεσία διαχείρισης ιατρικών περιστατικών.
+ * Αναλαμβάνει αποθήκευση, ανάκτηση και διαγραφή περιστατικών.
  */
 @Service
 public class MedicalCaseService {
 
-    /**
-     * Το repository που είναι υπεύθυνο για την επικοινωνία
-     * με τον πίνακα 'medical_cases' της βάσης δεδομένων.
-     */
     private final MedicalCaseRepository medicalCaseRepository;
 
-    /**
-     * Dependency Injection: Το Spring παρέχει
-     * αυτόματα το στιγμιότυπο του MedicalCaseRepository κατά την αρχικοποίηση της κλάσης.
-     */
     @Autowired
     public MedicalCaseService(MedicalCaseRepository medicalCaseRepository) {
         this.medicalCaseRepository = medicalCaseRepository;
     }
 
     /**
-     * Δημιουργεί ένα νέο ιατρικό περιστατικό και το αποθηκεύει στη βάση δεδομένων.
-     * @param medicalCase Το αντικείμενο του περιστατικού.
-     * @return Το αποθηκευμένο περιστατικό με το παραγόμενο αναγνωριστικό (ID) του.
+     * Δημιουργεί και αποθηκεύει ένα νέο ιατρικό περιστατικό.
      */
     public MedicalCase createMedicalCase(MedicalCase medicalCase) {
         return medicalCaseRepository.save(medicalCase);
     }
+
     /**
-     * Διαγράφει ένα ιατρικό περιστατικό από τη βάση δεδομένων βάσει του αναγνωριστικού του.
-     * @param id Το αναγνωριστικό (ID) του περιστατικού προς διαγραφή.
+     * Διαγράφει ένα περιστατικό.
      */
     public void deleteCase(Long id) {
         medicalCaseRepository.deleteById(id);
     }
 
     /**
-     * Ανακτά το πλήρες ιατρικό ιστορικό ενός συγκεκριμένου ασθενούς.
-     * @param patient Το αντικείμενο του ασθενούς του οποίου το ιστορικό αναζητείται.
-     * @return Μία λίστα με όλα τα ιατρικά περιστατικά του ασθενούς, ταξινομημένα κατά φθίνουσα ημερομηνία.
+     * Επιστρέφει το ιατρικό ιστορικό ενός ασθενή, ταξινομημένο κατά ημερομηνία.
      */
     public List<MedicalCase> getMedicalHistory(Patient patient) {
         return medicalCaseRepository.findByPatientOrderByDateDesc(patient);
     }
+
     /**
-     * Επιστρέφει το σύνολο των ιατρικών περιστατικών που υπάρχουν στο σύστημα.
-     * @return Λίστα με όλα τα καταχωρημένα αντικείμενα MedicalCase.
+     * Επιστρέφει ΟΛΑ τα περιστατικά (για Admin).
      */
     public List<MedicalCase> getAllCases() {
         return medicalCaseRepository.findAll();
     }
 
+    /**
+     * Βρίσκει ένα περιστατικό με βάση το ID.
+     */
+    public Optional<MedicalCase> findById(Long id) {
+        return medicalCaseRepository.findById(id);
+    }
 
+    /**
+     * Προσθέτει ένα νέο Q&A στο ιστορικό συνομιλίας ενός υπάρχοντος περιστατικού.
+     *
+     * ΔΙΟΡΘΩΣΗ: ΔΕΝ αλλάζουμε πλέον τα symptoms/diagnosis στην αρχική εγγραφή!
+     * Πριν: medicalCase.setSymptoms(symptoms) — αντικαθιστούσε τα ΑΡΧΙΚΑ συμπτώματα
+     * με τα τελευταία, χάνοντας την αρχική διάγνωση.
+     * Τώρα: Κρατάμε τα αρχικά symptoms/diagnosis και προσθέτουμε μόνο στο conversation.
+     */
+    public MedicalCase appendConversation(Long caseId, String symptoms, String diagnosis, String type, String tags) {
+        MedicalCase medicalCase = medicalCaseRepository.findById(caseId)
+                .orElseThrow(() -> new RuntimeException("Δεν βρέθηκε περιστατικό με id: " + caseId));
+
+        // Δημιουργούμε ή ανακτούμε το υπάρχον conversation array
+        JSONArray conversation;
+        if (medicalCase.getConversation() != null && !medicalCase.getConversation().isEmpty()) {
+            conversation = new JSONArray(medicalCase.getConversation());
+        } else {
+            conversation = new JSONArray();
+            // Αν είναι η πρώτη φορά, αποθηκεύουμε και τα ΑΡΧΙΚΑ στοιχεία στο conversation
+            JSONObject firstEntry = new JSONObject();
+            firstEntry.put("question", medicalCase.getSymptoms());
+            firstEntry.put("answer", medicalCase.getDiagnosis());
+            firstEntry.put("type", medicalCase.getType());
+            conversation.put(firstEntry);
+        }
+
+        // Προσθέτουμε το νέο Q&A
+        JSONObject entry = new JSONObject();
+        entry.put("question", symptoms);
+        entry.put("answer", diagnosis);
+        entry.put("type", type);
+        conversation.put(entry);
+
+        // Αποθηκεύουμε το ενημερωμένο conversation
+        medicalCase.setConversation(conversation.toString());
+
+        // ΔΕΝ αλλάζουμε τα αρχικά symptoms/diagnosis — μένουν ως είχαν!
+
+        // Ενημέρωση tags αν δόθηκαν
+        if (tags != null && !tags.isEmpty()) {
+            medicalCase.setTags(tags);
+        }
+
+        return medicalCaseRepository.save(medicalCase);
+    }
+
+    /**
+     * Ενημερώνει μόνο τα tags ενός περιστατικού.
+     */
+    public MedicalCase updateTags(Long id, String tags) {
+        MedicalCase medicalCase = medicalCaseRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Δεν βρέθηκε περιστατικό με id: " + id));
+        medicalCase.setTags(tags);
+        return medicalCaseRepository.save(medicalCase);
+    }
 }

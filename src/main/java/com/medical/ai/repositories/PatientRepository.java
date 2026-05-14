@@ -9,24 +9,25 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * By extending JpaRepository, Spring Data JPA automatically provides
- * standard CRUD (Create, Read, Update, Delete) operations.
- * - Patient: The domain type the repository manages.
- * - Long: The type of the id of the entity the repository manages.
- * No boilerplate code is needed for basic database interactions.
+ * Repository για τον πίνακα 'patients'.
+ *
+ * Το Spring Data JPA παρέχει αυτόματα όλες τις βασικές CRUD λειτουργίες.
+ * Εδώ ορίζουμε επιπλέον μεθόδους αναζήτησης:
+ * - findByAmka: για έλεγχο μοναδικότητας ΑΜΚΑ
+ * - findByDoctor: για προβολή ασθενών συγκεκριμένου γιατρού
  */
 @Repository
 public interface PatientRepository extends JpaRepository<Patient, Long> {
+
     /**
-     * Finds a patient by their unique AMKA number.
-     * Spring Data JPA automatically generates the SQL query:
-     * SELECT * FROM patients WHERE amka = ?
-     ** OPTIONAL EXPLANATION:
-     * We use Optional<Patient> instead of a plain Patient object to prevent
-     * NullPointerExceptions. If no patient is found with the given AMKA,
-     * the Optional container will be "empty" rather than returning null,
-     * forcing the developer to safely check for existence before accessing data.
+     * Βρίσκει ασθενή με βάση το ΑΜΚΑ.
+     * Επιστρέφει Optional για ασφαλή έλεγχο (αντί για null που προκαλεί σφάλματα).
      */
     Optional<Patient> findByAmka(String amka);
+
+    /**
+     * Βρίσκει όλους τους ασθενείς ενός συγκεκριμένου γιατρού.
+     * Χρησιμοποιείται στη σελίδα του γιατρού για να δει ΜΟΝΟ τους δικούς του ασθενείς.
+     */
     List<Patient> findByDoctor(User doctor);
 }

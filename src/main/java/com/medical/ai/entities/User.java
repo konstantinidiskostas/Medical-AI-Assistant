@@ -44,9 +44,9 @@ public class User {
     @Column(nullable = false)
     private String role;
 
-    /**
-     * Default constructor χρειάζεται από το JPA.
-     */
+    @Column(nullable = false)
+    private Boolean enabled = true;
+
     public User() {}
 
     /**
@@ -85,4 +85,6 @@ public class User {
     public String getRole() { return role; }
     public void setRole(String role) { this.role = role; }
 
+    public Boolean getEnabled() { return enabled; }
+    public void setEnabled(Boolean enabled) { this.enabled = enabled; }
 }

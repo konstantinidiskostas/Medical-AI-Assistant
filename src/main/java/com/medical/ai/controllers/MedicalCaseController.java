@@ -2,36 +2,43 @@ package com.medical.ai.controllers;
 
 import com.medical.ai.entities.MedicalCase;
 import com.medical.ai.entities.Patient;
+import com.medical.ai.entities.User;
 import com.medical.ai.services.MedicalCaseService;
 import com.medical.ai.services.PatientService;
+import com.medical.ai.services.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * REST Controller for managing Medical Cases (patient visits and diagnoses).
- * Handles the retrieval of patient history and the creation of new medical records.
+ * REST Controller για διαχείριση ιατρικών περιστατικών.
+ *
+ * ΔΙΟΡΘΩΣΗ: Το doctor_id τώρα ορίζεται σωστά όταν δημιουργείται ένα περιστατικό!
+ * Πριν: ο γιατρός ΔΕΝ αποθηκευόταν (doctor_id = NULL στη βάση).
+ * Τώρα: Παίρνουμε τον γιατρό από το Authentication του Spring Security.
  */
 @RestController
 @RequestMapping("/api/medical-cases")
-@CrossOrigin(origins = "http://localhost:5173") // Crucial: Allows the React frontend to communicate with these endpoints
+@CrossOrigin(origins = "http://localhost:5173")
 public class MedicalCaseController {
 
     private final MedicalCaseService medicalCaseService;
     private final PatientService patientService;
+    private final UserService userService;
 
     @Autowired
-    public MedicalCaseController(MedicalCaseService medicalCaseService, PatientService patientService) {
+    public MedicalCaseController(MedicalCaseService medicalCaseService, PatientService patientService, UserService userService) {
         this.medicalCaseService = medicalCaseService;
         this.patientService = patientService;
+        this.userService = userService;
     }
 
     /**
-     * Endpoint to create a standard medical case directly from an entity object.
-     * POST /api/medical-cases
+     * Δημιουργεί ένα νέο περιστατικό.
      */
     @PostMapping
     public MedicalCase createMedicalCase(@RequestBody MedicalCase medicalCase) {
@@ -42,54 +49,81 @@ public class MedicalCaseController {
     }
 
     /**
-     * Saves a NEW medical case to the database AFTER the doctor approves the AI diagnosis.
-     * This endpoint bridges the AI evaluation phase with the permanent patient history.
-     * POST /api/medical-cases/save
-     * * @param request The Data Transfer Object containing patient ID, symptoms, and the approved diagnosis.
-     * @return The newly saved MedicalCase entity.
+     * Αποθηκεύει ένα νέο περιστατικό ΑΦΟΤΟΥ ο γιατρός εγκρίνει τη διάγνωση του AI.
+     *
+     * ΔΙΟΡΘΩΣΗ: Τώρα ορίζεται το doctor_id από τον συνδεδεμένο χρήστη!
+     * Πριν: ο γιατρός δεν οριζόταν ποτέ (doctor_id = NULL στη βάση).
+     *
+     * @param request Τα δεδομένα του περιστατικού
+     * @param authentication Ο authenticated χρήστης (το Spring το γεμίζει αυτόματα)
+     * @return Το αποθηκευμένο περιστατικό
      */
     @PostMapping("/save")
-    public MedicalCase saveApprovedCase(@RequestBody CaseRequest request) {
-        // 1. Fetch the patient from the database securely using the provided ID
+    public MedicalCase saveApprovedCase(@RequestBody CaseRequest request, Authentication authentication) {
+        // 1. Βρίσκουμε τον ασθενή
         Patient patient = patientService.findById(request.getPatientId())
-                .orElseThrow(() -> new RuntimeException("Patient not found with id: " + request.getPatientId()));
+                .orElseThrow(() -> new RuntimeException("Δεν βρέθηκε ασθενής με id: " + request.getPatientId()));
 
-        // 2. Initialize a new Medical Case entity and populate it with the verified data
+        // 2. Βρίσκουμε τον γιατρό από τον authenticated χρήστη
+        String username = authentication.getName();
+        User doctor = userService.findByUsername(username)
+                .orElseThrow(() -> new RuntimeException("Δεν βρέθηκε χρήστης: " + username));
+
+        // 3. Δημιουργούμε το νέο περιστατικό με ΟΛΑ τα πεδία (συμπεριλαμβανομένου του γιατρού!)
         MedicalCase newCase = new MedicalCase();
         newCase.setPatient(patient);
+        newCase.setDoctor(doctor); // ΔΙΟΡΘΩΣΗ: Αυτό έλειπε!
         newCase.setSymptoms(request.getSymptoms());
         newCase.setDiagnosis(request.getDiagnosis());
         newCase.setType(request.getType());
-        newCase.setDate(LocalDateTime.now()); // Record the exact time of approval
+        newCase.setConversation(request.getConversation());
+        newCase.setTags(request.getTags());
+        newCase.setDate(LocalDateTime.now());
 
-        // 3. Persist the record to the database via the Service layer
         return medicalCaseService.createMedicalCase(newCase);
     }
 
     /**
-     * Retrieves the full medical history for a specific patient.
-     * GET /api/medical-cases/patient/{patientId}
-     * * @param patientId The unique identifier of the patient.
-     * @return A list of all historical medical cases associated with the patient.
+     * Προσθέτει νέο Q&A σε υπάρχον περιστατικό.
+     */
+    @PostMapping("/{id}/conversation")
+    public MedicalCase appendConversation(@PathVariable Long id, @RequestBody ConversationEntry entry) {
+        return medicalCaseService.appendConversation(id, entry.getSymptoms(), entry.getDiagnosis(), entry.getType(), entry.getTags());
+    }
+
+    /**
+     * Ενημερώνει tags ενός περιστατικού.
+     */
+    @PutMapping("/{id}/tags")
+    public MedicalCase updateTags(@PathVariable Long id, @RequestBody TagsRequest request) {
+        return medicalCaseService.updateTags(id, request.getTags());
+    }
+
+    /**
+     * Επιστρέφει το ιστορικό ενός ασθενή.
      */
     @GetMapping("/patient/{patientId}")
     public List<MedicalCase> getHistory(@PathVariable Long patientId) {
-        // Find the patient using the PatientService
         Patient patient = patientService.findById(patientId)
-                .orElseThrow(() -> new RuntimeException("Patient not found with id: " + patientId));
-
-        // Return the history list sorted by date (handled in the Service/Repository layer)
+                .orElseThrow(() -> new RuntimeException("Δεν βρέθηκε ασθενής με id: " + patientId));
         return medicalCaseService.getMedicalHistory(patient);
     }
+
+    /**
+     * Επιστρέφει ΟΛΑ τα περιστατικά (μόνο για Admin).
+     */
     @GetMapping
     public ResponseEntity<List<MedicalCase>> getAllCases() {
         try {
-            List<MedicalCase> cases = medicalCaseService.getAllCases();
-            return ResponseEntity.ok(cases);
+            return ResponseEntity.ok(medicalCaseService.getAllCases());
         } catch (Exception e) {
             return ResponseEntity.badRequest().build();
         }
     }
+
+    /**
+     * Διαγράφει ένα περιστατικό.
+     */
     @DeleteMapping("/{id}")
     public ResponseEntity<?> deleteMedicalCase(@PathVariable Long id) {
         try {
@@ -101,27 +135,49 @@ public class MedicalCaseController {
     }
 }
 
-/**
- * Data Transfer Object (DTO) for saving an approved AI case.
- * It maps the JSON payload sent from the React frontend to strict Java fields,
- * ensuring security and decoupling the API request from the internal database entity.
- */
+// --- DTOs ---
+
 class CaseRequest {
     private Long patientId;
     private String symptoms;
     private String diagnosis;
     private String type;
+    private String conversation;
+    private String tags;
 
-    // Getters and Setters required by Jackson for JSON deserialization
     public Long getPatientId() { return patientId; }
     public void setPatientId(Long patientId) { this.patientId = patientId; }
+    public String getSymptoms() { return symptoms; }
+    public void setSymptoms(String symptoms) { this.symptoms = symptoms; }
+    public String getDiagnosis() { return diagnosis; }
+    public void setDiagnosis(String diagnosis) { this.diagnosis = diagnosis; }
+    public String getType() { return type; }
+    public void setType(String type) { this.type = type; }
+    public String getConversation() { return conversation; }
+    public void setConversation(String conversation) { this.conversation = conversation; }
+    public String getTags() { return tags; }
+    public void setTags(String tags) { this.tags = tags; }
+}
+
+class ConversationEntry {
+    private String symptoms;
+    private String diagnosis;
+    private String type;
+    private String tags;
 
     public String getSymptoms() { return symptoms; }
     public void setSymptoms(String symptoms) { this.symptoms = symptoms; }
-
     public String getDiagnosis() { return diagnosis; }
     public void setDiagnosis(String diagnosis) { this.diagnosis = diagnosis; }
-
     public String getType() { return type; }
     public void setType(String type) { this.type = type; }
+    public String getTags() { return tags; }
+    public void setTags(String tags) { this.tags = tags; }
+}
+
+class TagsRequest {
+    private String tags;
+
+    public String getTags() { return tags; }
+    public void setTags(String tags) { this.tags = tags; }
 }

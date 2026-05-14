@@ -1,6 +1,7 @@
 package com.medical.ai.entities;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
@@ -30,9 +31,11 @@ public class MedicalCase {
     private String type;
     // Η απάντηση/διάγνωση που έδωσε το AI.
     private String diagnosis;
-    // Πιθανή θεραπεία (μελλοντική υλοποίηση).
+    // Ιστορικό πολλαπλών ερωτήσεων-απαντήσεων σε μορφή JSON array.
     @Column(columnDefinition = "TEXT")
-    private String treatment;
+    private String conversation;
+    // Ετικέτες (tags) για κατηγοριοποίηση, π.χ. "Διάγνωση,Θεραπεία"
+    private String tags;
     // Η ακριβής ημερομηνία και ώρα που αποθηκεύτηκε το περιστατικό.
     private LocalDateTime date;
 
@@ -44,7 +47,7 @@ public class MedicalCase {
      */
     @ManyToOne
     @JoinColumn(name = "patient_id")
-    @JsonIgnore // Prevents infinite JSON recursion
+    @JsonIgnoreProperties("medicalCases")
     private Patient patient;
 
     /**
@@ -70,9 +73,6 @@ public class MedicalCase {
     public String getDiagnosis() { return diagnosis; }
     public void setDiagnosis(String diagnosis) { this.diagnosis = diagnosis; }
 
-    public String getTreatment() { return treatment; }
-    public void setTreatment(String treatment) { this.treatment = treatment; }
-
     public LocalDateTime getDate() { return date; }
     public void setDate(LocalDateTime date) { this.date = date; }
 
@@ -84,4 +84,10 @@ public class MedicalCase {
 
     public String getType() { return type; }
     public void setType(String type) { this.type = type; }
+
+    public String getConversation() { return conversation; }
+    public void setConversation(String conversation) { this.conversation = conversation; }
+
+    public String getTags() { return tags; }
+    public void setTags(String tags) { this.tags = tags; }
 }
