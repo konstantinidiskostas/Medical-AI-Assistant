@@ -1,5 +1,6 @@
 package com.medical.ai.entities;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import java.util.ArrayList;
 import java.util.List;
@@ -61,6 +62,7 @@ public class Patient {
      */
     @ManyToOne
     @JoinColumn(name = "doctor_id", nullable = false)
+    @JsonIgnore
     private User doctor;
 
     /**

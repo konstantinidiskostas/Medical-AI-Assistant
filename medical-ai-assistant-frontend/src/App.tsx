@@ -40,6 +40,7 @@ function App() {
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [customTagInput, setCustomTagInput] = useState('');
   const [filterTag, setFilterTag] = useState<string>('');
+  const [amkaFilter, setAmkaFilter] = useState('');
   const [availableTags, setAvailableTags] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem('available_tags');
@@ -213,7 +214,7 @@ function App() {
           localStorage.setItem('app_view', 'admin-dashboard');
         } else {
           setCurrentView('patients');
-          localStorage.setItem('app_view', 'dashboard');
+          localStorage.setItem('app_view', 'patients');
         }
       } else alert('Λάθος στοιχεία');
     } catch (error) { alert('Σφάλμα σύνδεσης'); }
@@ -227,7 +228,7 @@ function App() {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ firstName: regFirstName, lastName: regLastName, email: regEmail, username: regUsername, password: regPassword, role: regRole }),
       });
-      if (response.ok) { alert('Επιτυχής Εγγραφή!'); setIsRegistering(false); }
+      if (response.ok) { alert('Επιτυχής Εγγραφή!'); setIsRegistering(false); setUsername(''); setPassword(''); }
       else alert('Σφάλμα εγγραφής.');
     } catch (error) { alert('Σφάλμα δικτύου.'); }
   };
@@ -239,6 +240,10 @@ function App() {
     setDoctorId(null);
     setCurrentView('dashboard');
     setSelectedPatient(null);
+    setUsername('');
+    setPassword('');
+    setRegFirstName(''); setRegLastName(''); setRegEmail('');
+    setRegUsername(''); setRegPassword(''); setRegRole('');
   };
 
   const handleAddPatient = async () => {
@@ -615,7 +620,7 @@ function App() {
               <button type="submit" className="w-full bg-blue-600 text-white font-bold p-4 rounded-xl hover:bg-blue-700 transition shadow-lg mt-2">{isRegistering ? 'Εγγραφή' : 'Είσοδος'}</button>
             </form>
             <div className="w-full mt-8 text-center text-slate-500 text-sm font-medium">
-              <p>{isRegistering ? 'Έχετε ήδη λογαριασμό;' : 'Δεν έχετε λογαριασμό;'} <button onClick={() => setIsRegistering(!isRegistering)} className="text-blue-600 font-bold hover:underline ml-1">{isRegistering ? 'Είσοδος' : 'Εγγραφή'}</button></p>
+              <p>{isRegistering ? 'Έχετε ήδη λογαριασμό;' : 'Δεν έχετε λογαριασμό;'} <button onClick={() => { setIsRegistering(!isRegistering); setUsername(''); setPassword(''); setRegFirstName(''); setRegLastName(''); setRegEmail(''); setRegUsername(''); setRegPassword(''); setRegRole(''); }} className="text-blue-600 font-bold hover:underline ml-1">{isRegistering ? 'Είσοδος' : 'Εγγραφή'}</button></p>
             </div>
           </div>
         </div>
@@ -761,13 +766,33 @@ function App() {
 
 
               {/* Tab: Cases */}
-              {adminTab === 'cases' && (
+              {adminTab === 'cases' && (() => {
+                const filteredCases = adminCases.filter((c: any) => {
+                  if (!filterTag && !amkaFilter) return true;
+                  if (filterTag) {
+                    const caseTags = c.tags ? c.tags.split(',').map((t: string) => t.trim()).filter((t: string) => t) : [];
+                    if (!caseTags.includes(filterTag)) return false;
+                  }
+                  if (amkaFilter) {
+                    const patientAmka = c.patient?.amka || '';
+                    if (!patientAmka.toLowerCase().includes(amkaFilter.toLowerCase())) return false;
+                  }
+                  return true;
+                });
+                return (
                   <div className="space-y-6">
                     <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
                       <h3 className="text-xl font-bold mb-6 text-slate-700 flex justify-between items-center">
                         Όλα τα Περιστατικά
-                        <span className="text-xs bg-slate-100 px-3 py-1 rounded-full text-slate-500 font-medium">{adminCases.length} εγγραφές</span>
+                        <span className="text-xs bg-slate-100 px-3 py-1 rounded-full text-slate-500 font-medium">{filteredCases.length} εγγραφές</span>
                       </h3>
+
+                      {/* AMKA search */}
+                      <div className="mb-4">
+                        <input type="text" placeholder="Αναζήτηση με ΑΜΚΑ..."
+                          value={amkaFilter} onChange={e => setAmkaFilter(e.target.value)}
+                          className="w-full p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-100 text-sm" />
+                      </div>
 
                       {/* Tag filter */}
                       <div className="flex flex-wrap gap-1.5 mb-6">
@@ -784,12 +809,8 @@ function App() {
                       </div>
 
                       <div className="grid gap-4">
-                        {adminCases.length > 0 ? (
-                          adminCases.filter((c: any) => {
-                            if (!filterTag) return true;
-                            const caseTags = c.tags ? c.tags.split(',').map((t: string) => t.trim()).filter((t: string) => t) : [];
-                            return caseTags.includes(filterTag);
-                          }).map((c: any) => {
+                        {filteredCases.length > 0 ? (
+                          filteredCases.map((c: any) => {
                             let data: any = { diagnosis: "Προβολή...", confidence: "N/A" };
                             try { const p = JSON.parse(c.diagnosis); data = { diagnosis: p.diagnosis, confidence: p.confidence }; }
                             catch (e) { data = { diagnosis: c.diagnosis.split('\n')[0].replace("ΔΙΑΓΝΩΣΗ:", "").replace(/\*\*/g, '').trim(), confidence: "N/A" }; }
@@ -814,6 +835,11 @@ function App() {
 
                                   {/* Diagnosis preview */}
                                   <div className="flex-1 min-w-0 border-l border-slate-50 pl-6 text-left">
+                                    {c.patient && (
+                                      <p className="text-[10px] text-slate-500 font-semibold mb-1">
+                                        {c.patient.firstName} {c.patient.lastName} — ΑΜΚΑ: {c.patient.amka}
+                                      </p>
+                                    )}
                                     <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tight mb-1 truncate">
                                       {c.symptoms ? `ΕΡΩΤΗΣΗ: ${c.symptoms}` : "Χωρίς ερώτημα"}
                                     </p>
@@ -850,7 +876,8 @@ function App() {
                       </div>
                     </div>
                   </div>
-              )}
+                );
+              })()}
             </div>
         )}
 
@@ -1370,8 +1397,8 @@ function App() {
 
                 {/* Header */}
                 <div className="p-8 bg-white border-b border-slate-100 flex justify-between items-center text-left">
-                  <div className="text-left">
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="text-left">
+                      <div className="flex items-center gap-2 mb-1">
             <span className="px-2 py-0.5 bg-blue-50 text-[10px] font-bold text-blue-600 rounded-md uppercase border border-blue-100/50">
               {selectedCase.type}
             </span>
@@ -1380,6 +1407,11 @@ function App() {
                       </p>
                     </div>
                     <h3 className="text-2xl font-bold text-slate-800 text-left">Λεπτομέρειες Εγγραφής</h3>
+                    {selectedCase.patient && (
+                      <p className="text-xs font-semibold text-slate-500 mt-1 text-left">
+                        {selectedCase.patient.firstName} {selectedCase.patient.lastName} — ΑΜΚΑ: {selectedCase.patient.amka}
+                      </p>
+                    )}
                   </div>
                   <button onClick={() => setSelectedCase(null)} className="w-12 h-12 flex items-center justify-center rounded-full bg-slate-50 text-slate-400 hover:text-rose-500 transition-all">✕</button>
                 </div>
@@ -1398,75 +1430,91 @@ function App() {
                       </div>
                     ) : null;
                   })()}
-                  {/* Ενότητα Συμπτωμάτων */}
-                  <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm text-left">
-                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 text-left">Συμπτώματα</h4>
-                    <p className="text-slate-700 italic text-left">"{selectedCase.symptoms}"</p>
-                  </div>
-
+                  {/* CONVERSATION HISTORY (chat style) */}
                   {(() => {
-                    let data;
+                    let convEntries: any[] = [];
                     try {
-                      // Μετατρέπουμε το αποθηκευμένο string πάλι σε αντικείμενο
-                      data = JSON.parse(selectedCase.diagnosis);
-                    } catch (e) {
-                      // Για παλιά δεδομένα που δεν ήταν JSON, τα δείχνουμε ως απλό κείμενο
-                      return <div className="p-6 bg-white rounded-3xl border whitespace-pre-wrap text-slate-600">{selectedCase.diagnosis}</div>;
+                      if (selectedCase.conversation) {
+                        const parsed = JSON.parse(selectedCase.conversation);
+                        if (Array.isArray(parsed) && parsed.length > 0) convEntries = parsed;
+                      }
+                    } catch (e) {}
+                    if (convEntries.length === 0) {
+                      convEntries = [{ question: selectedCase.symptoms, answer: selectedCase.diagnosis, type: selectedCase.type }];
                     }
-
                     return (
-                        <div className="space-y-6 text-left">
-                          {/* Κύρια Κάρτα Διάγνωσης (Mirror του AI Result) */}
-                          <div className="bg-white rounded-3xl p-8 shadow-sm border border-slate-100 relative overflow-hidden text-left">
-                            <div className="absolute top-0 left-0 w-2 h-full bg-blue-500"></div>
-                            <div className="flex justify-between items-start mb-4 text-left">
-                              <div className="text-left">
-                                <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest mb-1 text-left">Αποτελέσματα AI</p>
-                                <h3 className="text-2xl font-bold text-slate-800 text-left">{data.diagnosis}</h3>
-                              </div>
-                              <div className="text-right">
-                                <p className="text-[10px] font-bold text-slate-400 uppercase">Confidence</p>
-                                <span className="text-lg font-black text-blue-600">{data.confidence}</span>
+                      <div className="space-y-4">
+                        {convEntries.length > 1 && (
+                          <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-left">Ιστορικό Συνομιλίας</h4>
+                        )}
+                        {convEntries.map((entry: any, idx: number) => (
+                          <div key={idx} className="space-y-2">
+                            <div className="flex justify-end">
+                              <div className="bg-blue-50 p-3 rounded-2xl rounded-br-md max-w-[92%] border border-blue-100">
+                                <p className="text-[9px] font-bold text-blue-500 uppercase mb-1">Ερ. {idx + 1} • {entry.type}</p>
+                                <p className="text-xs text-slate-700">{entry.question}</p>
                               </div>
                             </div>
-                            <p className="text-slate-600 text-sm leading-relaxed border-t border-slate-50 pt-4 text-left italic">
-                              {data.analysis}
-                            </p>
-                          </div>
-
-                          {/* Grid για Recommendations & Red Flags */}
-                          <div className="grid md:grid-cols-2 gap-6 text-left">
-                            {/* ΠΡΟΤΑΣΕΙΣ */}
-                            <div className="bg-emerald-50/60 rounded-[32px] p-6 border border-emerald-100/50 text-left">
-                              <h4 className="text-emerald-700 font-bold mb-4 text-sm uppercase text-left flex items-center gap-2">
-                                <span className="bg-white w-7 h-7 flex items-center justify-center rounded-lg shadow-sm text-sm">📋</span> Προτάσεις
-                              </h4>
-                              <ul className="space-y-2 text-left">
-                                {data.recommendations?.map((rec, i) => (
-                                    <li key={i} className="flex items-start gap-2 text-[11px] text-emerald-900/80 text-left">
-                                      <span className="mt-1 w-1 h-1 rounded-full bg-emerald-400 shrink-0"></span>
-                                      {rec}
-                                    </li>
-                                ))}
-                              </ul>
+                            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                              {(() => {
+                                let d: any = { diagnosis: entry.answer };
+                                try { d = JSON.parse(entry.answer); } catch (e) { d = { diagnosis: entry.answer }; }
+                                return (
+                                  <div className="text-left">
+                                    <div className="p-4 border-b border-slate-50">
+                                      <div className="flex justify-between items-start">
+                                        <div className="flex-1 min-w-0">
+                                          <p className="text-[9px] font-black text-blue-500 uppercase tracking-widest mb-0.5">Διάγνωση</p>
+                                          <h4 className="text-sm font-bold text-slate-800">{d.diagnosis}</h4>
+                                        </div>
+                                        {d.confidence && (
+                                          <div className="text-right ml-2 shrink-0">
+                                            <p className="text-[8px] font-bold text-slate-400 uppercase">Score</p>
+                                            <span className="text-sm font-black text-blue-600">{d.confidence}</span>
+                                          </div>
+                                        )}
+                                      </div>
+                                      {d.analysis && (
+                                        <p className="text-[11px] text-slate-500 italic mt-2 leading-relaxed">{d.analysis}</p>
+                                      )}
+                                    </div>
+                                    {(d.recommendations?.length > 0 || d.red_flags?.length > 0) && (
+                                      <div className="grid grid-cols-2 gap-px bg-slate-100">
+                                        {d.recommendations?.length > 0 && (
+                                          <div className="bg-emerald-50/60 p-3">
+                                            <h5 className="text-[9px] font-bold text-emerald-700 uppercase mb-2">📋 Προτάσεις</h5>
+                                            <ul className="space-y-1">
+                                              {d.recommendations.map((rec: string, ri: number) => (
+                                                <li key={ri} className="flex items-start gap-1.5 text-[10px] text-emerald-900/80">
+                                                  <span className="mt-0.5 w-1 h-1 rounded-full bg-emerald-400 shrink-0"></span>
+                                                  {rec}
+                                                </li>
+                                              ))}
+                                            </ul>
+                                          </div>
+                                        )}
+                                        {d.red_flags?.length > 0 && (
+                                          <div className="bg-rose-50/60 p-3">
+                                            <h5 className="text-[9px] font-bold text-rose-700 uppercase mb-2">⚠️ Red Flags</h5>
+                                            <ul className="space-y-1">
+                                              {d.red_flags.map((flag: string, fi: number) => (
+                                                <li key={fi} className="flex items-start gap-1.5 text-[10px] text-rose-900/80">
+                                                  <span className="mt-0.5 w-1 h-1 rounded-full bg-rose-400 shrink-0"></span>
+                                                  {flag}
+                                                </li>
+                                              ))}
+                                            </ul>
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })()}
                             </div>
-
-                            {/* RED FLAGS */}
-                            <div className="bg-rose-50/60 rounded-[32px] p-6 border border-rose-100/50 text-left">
-                              <h4 className="text-rose-700 font-bold mb-4 text-sm uppercase text-left flex items-center gap-2">
-                                <span className="bg-white w-7 h-7 flex items-center justify-center rounded-lg shadow-sm text-sm">⚠️</span> Red Flags
-                              </h4>
-                              <ul className="space-y-2 text-left">
-                                {data.red_flags?.map((flag, i) => (
-                                    <li key={i} className="flex items-start gap-2 text-[11px] text-rose-900/80 text-left">
-                                      <span className="mt-1 w-1 h-1 rounded-full bg-rose-400 shrink-0"></span>
-                                      {flag}
-                                    </li>
-                                ))}
-                              </ul>
-                            </div>
                           </div>
-                        </div>
+                        ))}
+                      </div>
                     );
                   })()}
                 </div>

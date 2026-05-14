@@ -1,6 +1,7 @@
 package com.medical.ai.entities;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
@@ -46,7 +47,7 @@ public class MedicalCase {
      */
     @ManyToOne
     @JoinColumn(name = "patient_id")
-    @JsonIgnore // Prevents infinite JSON recursion
+    @JsonIgnoreProperties("medicalCases")
     private Patient patient;
 
     /**
