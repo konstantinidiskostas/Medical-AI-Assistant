@@ -137,28 +137,29 @@ public class GeminiService {
 
         HttpEntity<String> request = new HttpEntity<>(requestBodyJson.toString(), headers);
 
-        System.out.println("\n--- GEMINI REQUEST ---");
-        System.out.println(requestBodyJson.toString(2));
+        System.out.println("\n--- GEMINI PROMPT ---");
+        System.out.println(engineeredPrompt);
 
         try {
             ResponseEntity<String> response = restTemplate.postForEntity(requestUrl, request, String.class);
 
             String rawJson = response.getBody();
-            System.out.println("--- GEMINI RESPONSE ---");
-            System.out.println(rawJson);
-            System.out.println();
-
             if (rawJson == null || rawJson.isEmpty()) {
+                System.out.println("--- GEMINI RESPONSE: (κενό) ---\n");
                 return "Σφάλμα AI: Λάβαμε κενή απάντηση από το API.";
             }
 
             JSONObject jsonObject = new JSONObject(rawJson);
-            return jsonObject.getJSONArray("candidates")
+            String text = jsonObject.getJSONArray("candidates")
                     .getJSONObject(0)
                     .getJSONObject("content")
                     .getJSONArray("parts")
                     .getJSONObject(0)
                     .getString("text");
+            System.out.println("--- GEMINI RESPONSE ---");
+            System.out.println(text);
+            System.out.println();
+            return text;
 
         } catch (Exception e) {
             return "Σφάλμα AI: Προέκυψε πρόβλημα με την ανάλυση (" + e.getMessage() + "). Δοκιμάστε ξανά σε λίγο.";
