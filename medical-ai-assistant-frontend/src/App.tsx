@@ -265,9 +265,7 @@ function App() {
   const handleSaveCase = async () => {
     if (!selectedPatient || !aiQuery || !pendingDiagnosis) return;
 
-    // Εδώ είναι η κρίσιμη αλλαγή:
-    // Αντί για κείμενο, μετατρέπουμε ΟΛΟ το αντικείμενο σε ένα JSON string.
-    // Έτσι η δομή (Arrays για προτάσεις κλπ) μένει άθικτη μέσα στη βάση.
+
     const diagnosisToSave = typeof pendingDiagnosis === 'object'
         ? JSON.stringify(pendingDiagnosis)
         : pendingDiagnosis;
