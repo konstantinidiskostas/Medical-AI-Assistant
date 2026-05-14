@@ -27,10 +27,8 @@ public class GeminiController {
     @PostMapping("/query")
     public AiResponse askAi(@RequestBody AiRequest request) {
 
-        // Κλήση AI Service με προαιρετικό ιστορικό συνομιλίας
         String actualAiResponse = geminiService.getAiDiagnosis(request.getQuery(), request.getConversation());
 
-        // Τυλίγουμε την απόκριση για εμφάνιση στο frontend
         AiResponse response = new AiResponse();
         response.setDiagnosis(actualAiResponse);
 

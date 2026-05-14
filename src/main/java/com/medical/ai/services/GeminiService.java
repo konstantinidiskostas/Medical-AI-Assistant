@@ -137,11 +137,17 @@ public class GeminiService {
 
         HttpEntity<String> request = new HttpEntity<>(requestBodyJson.toString(), headers);
 
+        System.out.println("\n--- GEMINI REQUEST ---");
+        System.out.println(requestBodyJson.toString(2));
+
         try {
             ResponseEntity<String> response = restTemplate.postForEntity(requestUrl, request, String.class);
 
-            // ΔΙΟΡΘΩΣΗ: Έλεγχος για null απόκριση
             String rawJson = response.getBody();
+            System.out.println("--- GEMINI RESPONSE ---");
+            System.out.println(rawJson);
+            System.out.println();
+
             if (rawJson == null || rawJson.isEmpty()) {
                 return "Σφάλμα AI: Λάβαμε κενή απάντηση από το API.";
             }
