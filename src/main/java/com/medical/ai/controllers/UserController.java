@@ -60,6 +60,11 @@ public class UserController {
             User user = userService.findByUsername(loginRequest.getUsername())
                     .orElseThrow(() -> new RuntimeException("User not found"));
 
+            // 3. Block login if admin account is not yet approved
+            if ("Pending_Admin".equals(user.getRole())) {
+                return ResponseEntity.status(401).body("Ο λογαριασμός δεν έχει εγκριθεί ακόμα.");
+            }
+
             // 3. Generate a JWT Token for the authenticated session
             String token = jwtUtil.generateToken(user.getUsername());
 
@@ -75,6 +80,21 @@ public class UserController {
     public ResponseEntity<List<User>> getAllUsers() {
         List<User> users = userService.getAllUsers();
         return ResponseEntity.ok(users);
+    }
+
+    @GetMapping("/pending")
+    public ResponseEntity<List<User>> getPendingUsers() {
+        return ResponseEntity.ok(userService.getPendingUsers());
+    }
+
+    @PutMapping("/approve/{id}")
+    public ResponseEntity<?> approveUser(@PathVariable Long id) {
+        try {
+            User user = userService.approveUser(id);
+            return ResponseEntity.ok(user);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
     }
 
     @PutMapping("/{id}")

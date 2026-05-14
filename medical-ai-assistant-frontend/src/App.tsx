@@ -423,8 +423,8 @@ function App() {
       });
 
       if (response.ok) {
-        // Αν πετύχει η διαγραφή, ξανατραβάμε τα περιστατικά για να ανανεωθεί η λίστα
-        fetchMedicalCases(selectedPatient.patientId);
+        if (selectedPatient) fetchMedicalCases(selectedPatient.patientId);
+        fetchAdminCases();
       } else {
         alert('Σφάλμα κατά τη διαγραφή του περιστατικού.');
       }
@@ -681,7 +681,7 @@ function App() {
                     <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
                       <h3 className="text-xl font-bold mb-6 text-slate-700">Ενεργοί Χρήστες</h3>
                       <ul className="grid gap-4">
-                        {allUsers.length > 0 ? allUsers.filter((u: any) => u.id !== doctorId).map((u: any) => (
+                        {allUsers.length > 0 ? allUsers.filter((u: any) => u.id !== doctorId && u.role !== 'Pending_Admin').map((u: any) => (
                             <li key={u.id} className="bg-white p-6 rounded-2xl shadow-sm border flex justify-between items-center transition hover:shadow-md">
                               <div>
                                 <span className="font-bold text-lg text-slate-800">{u.firstName} {u.lastName}</span>
@@ -704,7 +704,7 @@ function App() {
                             <li key={u.id} className="p-5 border border-slate-100 bg-slate-50 rounded-2xl flex justify-between items-center">
                               <div>
                                 <span className="font-bold text-lg block text-slate-800">{u.firstName} {u.lastName}</span>
-                                <span className="text-sm text-slate-500">@{u.username} • Ιδιότητα: {u.role}</span>
+                                <span className="text-sm text-slate-500">@{u.username} • Ιδιότητα: Διαχειριστής (Αναμονή έγκρισης)</span>
                               </div>
                               <button onClick={() => handleApprove(u.id)} className="bg-green-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-green-700 shadow-sm transition">Έγκριση</button>
                             </li>
@@ -762,28 +762,93 @@ function App() {
 
               {/* Tab: Cases */}
               {adminTab === 'cases' && (
-                  <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
+                  <div className="space-y-6">
+                    <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
+                      <h3 className="text-xl font-bold mb-6 text-slate-700 flex justify-between items-center">
+                        Όλα τα Περιστατικά
+                        <span className="text-xs bg-slate-100 px-3 py-1 rounded-full text-slate-500 font-medium">{adminCases.length} εγγραφές</span>
+                      </h3>
 
-                    <ul className="grid gap-4">
-                      {adminCases.length > 0 ? adminCases.map((c: any) => (
-                          <li key={c.id} className="bg-slate-50 p-6 rounded-2xl border border-slate-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-                            <div className="flex-1 w-full">
-                              <span className="text-sm font-bold text-purple-600 mb-1 block">
-                                {new Date(c.date).toLocaleString()}
-                              </span>
-                              <span className="font-bold text-lg text-slate-800 block mb-3">
-                                Διάγνωση/Απάντηση: {c.diagnosis}
-                              </span>
-                              <div className="bg-white p-4 rounded-xl border border-slate-100">
-                                <p className="text-xs text-slate-400 uppercase font-bold mb-1">Ερωτημα / Συμπτωματα:</p>
-                                <p className="text-sm text-slate-600">{c.symptoms}</p>
+                      {/* Tag filter */}
+                      <div className="flex flex-wrap gap-1.5 mb-6">
+                        <button onClick={() => setFilterTag('')}
+                          className={`px-3 py-1 rounded-xl text-[9px] font-bold transition-all border ${
+                            !filterTag ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-400'
+                          }`}>Όλα</button>
+                        {availableTags.map(tag => (
+                          <button key={tag} onClick={() => setFilterTag(tag === filterTag ? '' : tag)}
+                            className={`px-3 py-1 rounded-xl text-[9px] font-bold transition-all border ${
+                              filterTag === tag ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-500 border-slate-200 hover:border-blue-200 hover:text-blue-600'
+                            }`}>{tag}</button>
+                        ))}
+                      </div>
+
+                      <div className="grid gap-4">
+                        {adminCases.length > 0 ? (
+                          adminCases.filter((c: any) => {
+                            if (!filterTag) return true;
+                            const caseTags = c.tags ? c.tags.split(',').map((t: string) => t.trim()).filter((t: string) => t) : [];
+                            return caseTags.includes(filterTag);
+                          }).map((c: any) => {
+                            let data: any = { diagnosis: "Προβολή...", confidence: "N/A" };
+                            try { const p = JSON.parse(c.diagnosis); data = { diagnosis: p.diagnosis, confidence: p.confidence }; }
+                            catch (e) { data = { diagnosis: c.diagnosis.split('\n')[0].replace("ΔΙΑΓΝΩΣΗ:", "").replace(/\*\*/g, '').trim(), confidence: "N/A" }; }
+
+                            const caseTags = c.tags ? c.tags.split(',').map((t: string) => t.trim()).filter((t: string) => t) : [];
+
+                            return (
+                              <div key={c.id}
+                                onClick={() => setSelectedCase(c)}
+                                className="group cursor-pointer bg-white border rounded-2xl p-5 hover:shadow-md hover:border-blue-200 transition-all duration-200 border-slate-100"
+                              >
+                                <div className="flex items-center gap-6 text-left">
+                                  {/* Date & Type */}
+                                  <div className="w-28 flex-shrink-0 text-left">
+                                    <p className="text-[11px] font-bold text-slate-400 mb-1">
+                                      {new Date(c.date).toLocaleDateString('el-GR')}
+                                    </p>
+                                    <span className="inline-block px-2 py-1 bg-blue-50 text-[9px] font-bold text-blue-600 rounded-md uppercase border border-blue-100/50 leading-none">
+                                      {c.type || "Γενική"}
+                                    </span>
+                                  </div>
+
+                                  {/* Diagnosis preview */}
+                                  <div className="flex-1 min-w-0 border-l border-slate-50 pl-6 text-left">
+                                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tight mb-1 truncate">
+                                      {c.symptoms ? `ΕΡΩΤΗΣΗ: ${c.symptoms}` : "Χωρίς ερώτημα"}
+                                    </p>
+                                    <p className="text-sm font-bold text-slate-800 leading-snug line-clamp-1">
+                                      {data.diagnosis}
+                                    </p>
+                                    {caseTags.length > 0 && (
+                                      <div className="flex flex-wrap gap-1 mt-1.5">
+                                        {caseTags.map((tag: string) => (
+                                          <span key={tag} className="text-[8px] px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-500 font-medium">{tag}</span>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {/* Score & delete */}
+                                  <div className="w-20 flex-shrink-0 flex flex-col items-end gap-1">
+                                    <div className="bg-slate-50/80 px-3 py-1.5 rounded-xl border border-slate-100 text-center w-full">
+                                      <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mb-0.5 text-center">Score</p>
+                                      <p className="text-[11px] font-black text-blue-600 truncate text-center">{data.confidence}</p>
+                                    </div>
+                                    <button onClick={(e) => { e.stopPropagation(); handleDeleteCase(c.id); }}
+                                      className="text-[10px] font-bold text-rose-500 hover:text-rose-700 transition-all">Διαγραφή</button>
+                                  </div>
+                                </div>
                               </div>
-                            </div>
-                            {/* Αν στο μέλλον θες κουμπί διαγραφής περιστατικού, το βάζεις εδώ */}
-                            {/* <button className="text-red-500 font-bold hover:underline transition">Διαγραφή</button> */}
-                          </li>
-                      )) : <p className="text-slate-500 font-medium">Δεν βρέθηκαν περιστατικά ή εκκρεμεί το API στο Backend.</p>}
-                    </ul>
+                            );
+                          })
+                        ) : (
+                          <div className="text-center py-12 bg-slate-50/50 rounded-3xl border-2 border-dashed border-slate-200">
+                            <p className="text-slate-400 text-sm font-medium">Δεν βρέθηκαν περιστατικά.</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
               )}
             </div>

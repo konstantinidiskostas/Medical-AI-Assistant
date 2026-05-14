@@ -5,6 +5,7 @@ import com.medical.ai.repositories.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
@@ -19,11 +20,6 @@ public class UserService {
     // Εξάρτηση: Χρειαζόμαστε το UserRepository για να έχουμε πρόσβαση στα δεδομένα των χρηστών στη βάση.
     private final UserRepository userRepository;
 
-    /**
-     * Dependency Injection
-     * Το Spring Boot βρίσκει αυτόματα το UserRepository και το
-     * δίνει έτοιμο προς χρήση μέσα από αυτόν τον κατασκευαστή.
-     */
     @Autowired
     public UserService(UserRepository userRepository) {
         this.userRepository = userRepository;
@@ -38,9 +34,13 @@ public class UserService {
      * @param user Το αντικείμενο του χρήστη με το username και τον κωδικό του.
      * @return Τον αποθηκευμένο χρήστη.
      */
+    @Transactional
     public User registerUser(User user) {
-        // Κρυπτογράφηση του κωδικού πριν την αποθήκευση στη βάση δεδομένων
         user.setPassword(passwordEncoder.encode(user.getPassword()));
+        if ("Admin".equalsIgnoreCase(user.getRole())) {
+            user.setRole("Pending_Admin");
+            user.setEnabled(false);
+        }
         return userRepository.save(user);
     }
 
@@ -57,6 +57,19 @@ public class UserService {
 
     public List<User> getAllUsers() {
         return userRepository.findAll();
+    }
+
+    public List<User> getPendingUsers() {
+        return userRepository.findByRole("Pending_Admin");
+    }
+
+    @Transactional
+    public User approveUser(Long id) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("User not found with id: " + id));
+        user.setRole("Admin");
+        user.setEnabled(true);
+        return userRepository.save(user);
     }
 
     public void deleteUser(Long id) {
